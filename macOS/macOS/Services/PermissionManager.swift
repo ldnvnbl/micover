@@ -5,6 +5,7 @@ import Observation
 import CoreGraphics
 
 @Observable
+@MainActor
 final class PermissionManager {
     enum PermissionType {
         case microphone
@@ -14,19 +15,15 @@ final class PermissionManager {
     var microphoneStatus: AVAuthorizationStatus = .notDetermined
     var accessibilityStatus: Bool = false
 
-    private var permissionCheckTimer: Timer?
-    private var timerCheckCount = 0
-    private let maxTimerChecks = 120 // Allow up to 120 seconds of follow-up checks
+    private var permissionCheckTask: Task<Void, Never>?
+    private let maxCheckCount = 120 // Allow up to 120 seconds of follow-up checks
 
     init() {
         checkPermissions()
         setupNotificationObservers()
     }
 
-    deinit {
-        stopMonitoringAccessibilityPermission()
-        removeNotificationObservers()
-    }
+    // MARK: - Public Methods
     
     func checkPermissions() {
         microphoneStatus = AVCaptureDevice.authorizationStatus(for: .audio)
@@ -58,10 +55,13 @@ final class PermissionManager {
     }
     
     func requestAccessibilityPermission() {
+        print("🔑 requestAccessibilityPermission() called")
         let options: NSDictionary = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true]
         accessibilityStatus = AXIsProcessTrustedWithOptions(options)
+        print("🔑 After prompt, accessibilityStatus = \(accessibilityStatus)")
         
         if !hasAccessibilityPermission {
+            print("🔑 Permission not granted yet, starting monitoring...")
             startMonitoringAccessibilityPermission()
         }
     }
@@ -101,48 +101,56 @@ final class PermissionManager {
     // MARK: - Private Methods
 
     private func startMonitoringAccessibilityPermission() {
-        // 停止之前的定时器（如果有）
+        print("🚀 startMonitoringAccessibilityPermission() called")
+        // Cancel any existing monitoring task
         stopMonitoringAccessibilityPermission()
 
-        // 立即检查一次当前状态
+        // Check current status immediately
         checkAccessibilityStatus()
 
-        // 如果权限未授予，启动最长 120 秒的轮询定时器
-        if !accessibilityStatus {
-            timerCheckCount = 0
-            DispatchQueue.main.async { [weak self] in
-                guard let self = self else { return }
-
-                self.permissionCheckTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] timer in
-                    guard let self = self else {
-                        timer.invalidate()
-                        return
-                    }
-
-                    print("⏱️ Accessibility permission timer check #\(self.timerCheckCount + 1), current status: \(self.accessibilityStatus)")
-                    self.checkAccessibilityStatus()
-                    self.timerCheckCount += 1
-
-                    // 达到最大检查次数或权限已授予时停止 timer
-                    if self.timerCheckCount >= self.maxTimerChecks || self.accessibilityStatus {
-                        timer.invalidate()
-                        self.permissionCheckTimer = nil
-                        print("✅ Accessibility permission timer stopped after \(self.timerCheckCount) checks")
-                    }
+        // If permission not granted, start polling with Task.sleep (avoids Timer/RunLoop issues)
+        guard !accessibilityStatus else { 
+            print("✅ Permission already granted, no need to monitor")
+            return 
+        }
+        
+        print("⏱️ Starting permission polling task...")
+        let maxChecks = maxCheckCount
+        permissionCheckTask = Task { [weak self] in
+            print("⏱️ Polling task started")
+            for checkCount in 1...maxChecks {
+                // Check if task was cancelled
+                if Task.isCancelled { 
+                    print("⏱️ Task cancelled at check #\(checkCount)")
+                    break 
                 }
-
-                // 确保 Timer 立即运行
-                if let timer = self.permissionCheckTimer {
-                    RunLoop.current.add(timer, forMode: .common)
+                
+                // Wait 1 second
+                try? await Task.sleep(nanoseconds: 1_000_000_000)
+                
+                guard let self, !Task.isCancelled else { 
+                    print("⏱️ Self is nil or task cancelled")
+                    break 
+                }
+                
+                print("⏱️ Accessibility permission check #\(checkCount), current status: \(self.accessibilityStatus)")
+                self.checkAccessibilityStatus()
+                
+                // Stop if permission granted
+                if self.accessibilityStatus {
+                    print("✅ Accessibility permission granted after \(checkCount) checks")
+                    break
                 }
             }
+            
+            print("🛑 Accessibility permission monitoring stopped")
         }
+        print("⏱️ Permission polling task created: \(permissionCheckTask != nil)")
     }
 
     private func stopMonitoringAccessibilityPermission() {
-        permissionCheckTimer?.invalidate()
-        permissionCheckTimer = nil
-        timerCheckCount = 0
+        permissionCheckTask?.cancel()
+        permissionCheckTask = nil
     }
 
     private func checkAccessibilityStatus() {
@@ -151,8 +159,8 @@ final class PermissionManager {
             print("🔄 Accessibility permission changed: \(accessibilityStatus) -> \(newStatus)")
             accessibilityStatus = newStatus
 
-            // 如果权限已授予且 timer 还在运行，停止它
-            if newStatus && permissionCheckTimer != nil {
+            // Stop monitoring if permission was granted
+            if newStatus {
                 stopMonitoringAccessibilityPermission()
             }
         }
@@ -160,36 +168,19 @@ final class PermissionManager {
 
     // MARK: - Real-time Accessibility Permission Check
 
-    /// Uses CGEvent.tapCreate to check accessibility permission in real-time
-    /// This method doesn't cache results and can detect permission changes without app restart
-    private func checkAccessibilityPermissionRealtime() -> Bool {
-        // Try to create an event tap - this will fail if we don't have accessibility permission
-        // We use .listenOnly to avoid triggering the system permission dialog
-        let tap = CGEvent.tapCreate(
-            tap: .cghidEventTap,           // Tap at HID level
-            place: .headInsertEventTap,    // Insert at head of list
-            options: .listenOnly,          // Listen only - doesn't trigger permission dialog
-            eventsOfInterest: CGEventMask(1 << CGEventType.keyDown.rawValue), // Monitor key events
-            callback: { _, _, _, _ in nil },  // Minimal callback that returns nil
-            userInfo: nil                  // No user info needed
-        )
-
-        if let tap = tap {
-            // Permission granted - clean up the tap immediately
-            CFMachPortInvalidate(tap)
-            print("✅ CGEvent.tapCreate succeeded - Accessibility permission granted")
-            return true
-        } else {
-            // Permission denied or not yet granted
-            print("❌ CGEvent.tapCreate failed - Accessibility permission not granted")
-            return false
-        }
+    /// Checks accessibility permission using AXIsProcessTrusted()
+    /// Note: CGEvent.tapCreate() requires app restart to detect newly granted permissions,
+    /// so we use AXIsProcessTrusted() which updates more reliably during the same session.
+    private nonisolated func checkAccessibilityPermissionRealtime() -> Bool {
+        let result = AXIsProcessTrusted()
+        print("🔍 AXIsProcessTrusted() = \(result)")
+        return result
     }
 
     // MARK: - Notification Observers
 
     private func setupNotificationObservers() {
-        // 监听分布式通知中心的 accessibility 变化
+        // Monitor distributed notification center for accessibility changes
         DistributedNotificationCenter.default().addObserver(
             self,
             selector: #selector(accessibilityChanged),
@@ -197,7 +188,7 @@ final class PermissionManager {
             object: nil
         )
 
-        // 监听应用激活事件
+        // Monitor app activation events
         NotificationCenter.default.addObserver(
             self,
             selector: #selector(applicationDidBecomeActive),
@@ -208,7 +199,7 @@ final class PermissionManager {
         print("📡 Started monitoring accessibility permission changes via notifications")
     }
 
-    private func removeNotificationObservers() {
+    private nonisolated func removeNotificationObservers() {
         DistributedNotificationCenter.default().removeObserver(self)
         NotificationCenter.default.removeObserver(self)
     }
@@ -216,13 +207,16 @@ final class PermissionManager {
     @objc private func accessibilityChanged(_ notification: Notification) {
         print("🔔 Received accessibility change notification, current status: \(accessibilityStatus)")
         // Delay the check slightly to allow the system to finalize the permission state.
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
+        Task { @MainActor [weak self] in
+            try? await Task.sleep(nanoseconds: 500_000_000) // 0.5 seconds
             self?.checkAccessibilityStatus()
         }
     }
 
     @objc private func applicationDidBecomeActive(_ notification: Notification) {
         print("🔄 App became active, checking permissions...")
-        checkPermissions()
+        Task { @MainActor [weak self] in
+            self?.checkPermissions()
+        }
     }
 }

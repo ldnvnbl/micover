@@ -42,10 +42,11 @@ class AppSessionCoordinator: ObservableObject {
         let microphoneStatus = AVCaptureDevice.authorizationStatus(for: .audio)
         let hasMicrophonePermission = microphoneStatus == .authorized
 
-        // Check accessibility permission using AXIsProcessTrusted
-        let hasAccessibilityPermission = await Task.detached(priority: .userInitiated) {
-            return AXIsProcessTrusted()
-        }.value
+        // Check accessibility permission using real-time detection (CGEvent.tapCreate)
+        // This avoids the cached AXIsProcessTrusted() which may return stale values
+        let hasAccessibilityPermission = await HotkeyManager.checkAccessibilityPermissionAsync()
+        
+        print("🔐 Permission check: microphone=\(hasMicrophonePermission), accessibility=\(hasAccessibilityPermission)")
 
         permissionsGranted = hasMicrophonePermission && hasAccessibilityPermission
     }

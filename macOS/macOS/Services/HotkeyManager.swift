@@ -212,41 +212,21 @@ final class HotkeyManager {
 
     // MARK: - Permission Checks
 
+    /// Check accessibility permission using AXIsProcessTrusted()
+    /// Note: CGEvent.tapCreate() requires app restart to detect newly granted permissions,
+    /// so we use AXIsProcessTrusted() which updates reliably during the same session.
     static func checkAccessibilityPermission() -> Bool {
-        let tap = CGEvent.tapCreate(
-            tap: .cghidEventTap,
-            place: .headInsertEventTap,
-            options: .listenOnly,
-            eventsOfInterest: CGEventMask(1 << CGEventType.keyDown.rawValue),
-            callback: { _, _, _, _ in nil },
-            userInfo: nil
-        )
-
-        if let tap = tap {
-            CFMachPortInvalidate(tap)
-            return true
-        }
-        return false
+        let result = AXIsProcessTrusted()
+        print("🔍 HotkeyManager.checkAccessibilityPermission() = \(result)")
+        return result
     }
 
     static func checkAccessibilityPermissionAsync() async -> Bool {
         return await withCheckedContinuation { continuation in
             Task.detached(priority: .utility) {
-                let tap = CGEvent.tapCreate(
-                    tap: .cghidEventTap,
-                    place: .headInsertEventTap,
-                    options: .listenOnly,
-                    eventsOfInterest: CGEventMask(1 << CGEventType.keyDown.rawValue),
-                    callback: { _, _, _, _ in nil },
-                    userInfo: nil
-                )
-
-                if let tap = tap {
-                    CFMachPortInvalidate(tap)
-                    continuation.resume(returning: true)
-                } else {
-                    continuation.resume(returning: false)
-                }
+                let result = AXIsProcessTrusted()
+                print("🔍 HotkeyManager.checkAccessibilityPermissionAsync() = \(result)")
+                continuation.resume(returning: result)
             }
         }
     }

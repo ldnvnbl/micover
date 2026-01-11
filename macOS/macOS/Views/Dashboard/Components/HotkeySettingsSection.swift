@@ -37,50 +37,8 @@ struct HotkeySettingsSection: View {
                     
                     Spacer()
                     
-                    // 快捷键按钮（点击进入录制模式）
-                    if isRecording {
-                        // 录制状态
-                        HStack(spacing: 8) {
-                            Image(systemName: "record.circle")
-                                .font(.system(size: 12))
-                                .foregroundColor(.red)
-                                .symbolEffect(.pulse, isActive: true)
-                            
-                            Text("按下快捷键...")
-                                .font(.system(size: 13))
-                                .foregroundColor(.secondary)
-                            
-                            Button("取消") {
-                                stopRecording()
-                            }
-                            .buttonStyle(.bordered)
-                            .controlSize(.regular)
-                        }
-                    } else {
-                        // 显示当前快捷键
-                        Button {
-                            startRecording()
-                        } label: {
-                            HStack(spacing: 4) {
-                                if let hotkey = currentHotkey {
-                                    ForEach(Array(hotkey.keyParts.enumerated()), id: \.offset) { index, part in
-                                        if index > 0 {
-                                            Text("+")
-                                                .font(.system(size: 11))
-                                                .foregroundColor(.secondary)
-                                        }
-                                        KeyboardKey(key: part)
-                                    }
-                                } else {
-                                    Text("点击设置")
-                                        .font(.system(size: 13))
-                                        .foregroundColor(.secondary)
-                                }
-                            }
-                        }
-                        .buttonStyle(.plain)
-                        .help("点击修改快捷键")
-                    }
+                    // 快捷键输入框
+                    hotkeyInputField
                 }
                 .padding(.horizontal, 16)
                 .padding(.vertical, 12)
@@ -93,6 +51,87 @@ struct HotkeySettingsSection: View {
                 RoundedRectangle(cornerRadius: 10)
                     .stroke(Color(NSColor.separatorColor), lineWidth: 0.5)
             )
+        }
+    }
+    
+    // MARK: - Hotkey Input Field
+    
+    @ViewBuilder
+    private var hotkeyInputField: some View {
+        if isRecording {
+            // 录制状态
+            HStack(spacing: 8) {
+                Image(systemName: "record.circle")
+                    .font(.system(size: 12))
+                    .foregroundColor(.red)
+                    .symbolEffect(.pulse, isActive: true)
+                
+                Text("按下快捷键...")
+                    .font(.system(size: 13))
+                    .foregroundColor(.secondary)
+                
+                Button("取消") {
+                    stopRecording()
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .background(
+                RoundedRectangle(cornerRadius: 8)
+                    .fill(Color(NSColor.controlBackgroundColor))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 8)
+                    .stroke(Color.accentColor.opacity(0.5), lineWidth: 1.5)
+            )
+        } else {
+            // 显示当前快捷键的输入框样式
+            HStack(spacing: 6) {
+                // 左侧：快捷键显示
+                if let hotkey = currentHotkey {
+                    ForEach(Array(hotkey.keyParts.enumerated()), id: \.offset) { index, part in
+                        if index > 0 {
+                            Text("+")
+                                .font(.system(size: 11))
+                                .foregroundColor(.secondary)
+                        }
+                        KeyboardKeyCompact(key: part)
+                    }
+                } else {
+                    Text("点击设置")
+                        .font(.system(size: 13))
+                        .foregroundColor(.secondary)
+                }
+                
+                // 右侧：清除按钮（重置为 Fn）
+                Button {
+                    resetToDefault()
+                } label: {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundColor(Color(NSColor.tertiaryLabelColor))
+                }
+                .buttonStyle(.plain)
+                .padding(.leading, 8)
+                .help("重置为默认快捷键 (Fn)")
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
+            .background(
+                RoundedRectangle(cornerRadius: 8)
+                    .fill(Color(NSColor.textBackgroundColor))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 8)
+                    .stroke(Color(NSColor.separatorColor), lineWidth: 1)
+            )
+            .contentShape(Rectangle())
+            .onTapGesture {
+                startRecording()
+            }
+            .help("点击修改快捷键")
         }
     }
     
@@ -139,6 +178,11 @@ struct HotkeySettingsSection: View {
         stopRecording()
     }
     
+    private func resetToDefault() {
+        // 重置为默认的 Fn 键
+        setHotkey(.fnKey)
+    }
+    
     private func cleanupMonitors() {
         if let monitor = keyMonitor {
             NSEvent.removeMonitor(monitor)
@@ -149,6 +193,29 @@ struct HotkeySettingsSection: View {
             flagsMonitor = nil
         }
         fnKeyDetected = false
+    }
+}
+
+// MARK: - Compact Keyboard Key Component
+
+/// 紧凑型键盘按键样式（用于输入框内）
+struct KeyboardKeyCompact: View {
+    let key: String
+    
+    var body: some View {
+        Text(key)
+            .font(.system(size: 12, weight: .medium, design: .rounded))
+            .foregroundColor(Color(NSColor.labelColor))
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
+            .background(
+                RoundedRectangle(cornerRadius: 5)
+                    .fill(Color(NSColor.controlBackgroundColor))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 5)
+                    .stroke(Color(NSColor.separatorColor), lineWidth: 0.5)
+            )
     }
 }
 
