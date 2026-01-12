@@ -1,6 +1,6 @@
 # PROJECT KNOWLEDGE BASE
 
-**Generated:** 2026-01-09 | **Commit:** 1e7e0ff | **Branch:** open-source-dev
+**Generated:** 2026-01-12 | **Commit:** f9e3512 | **Branch:** main
 
 ## OVERVIEW
 
@@ -105,32 +105,42 @@ public enum ServiceError: LocalizedError, Sendable {
 
 ## ANTI-PATTERNS (THIS PROJECT)
 
-- **No tests unless requested**: Explicit policy - do not write test files or examples
-- **No linter**: No SwiftLint configured
-- **No `as any`, `@ts-ignore`**: Never suppress type errors
-- **No force unwraps**: Avoid `!` operator
-- **No callbacks**: Use async/await
+| Pattern | Status | Notes |
+|---------|--------|-------|
+| Tests | **No tests unless requested** | Explicit policy |
+| Linter | **No SwiftLint** | Not configured |
+| `as any`, `@ts-ignore` | **FORBIDDEN** | Never suppress type errors |
+| Force unwraps `!` | **FORBIDDEN** | One exception: `SpeechProtocol.swift:34` static URL |
+| Callbacks | **FORBIDDEN** | Use async/await |
+| `Timer.scheduledTimer` | **FORBIDDEN** | Use `Task.sleep` |
+| Empty catch blocks | **FORBIDDEN** | Handle all errors |
 
 ## CRITICAL IMPLEMENTATION NOTES
 
 ### Threading
 - `AXIsProcessTrusted()` MUST be called async (blocks UI otherwise)
-- Use `HotkeyManager.checkAccessibilityPermissionAsync()`
+- Use `HotkeyManager.checkAccessibilityPermissionAsync()` - runs on `.utility` priority
+- CGEvent.tapCreate() requires app restart for new permissions; AXIsProcessTrusted() updates live
 
-### WebSocket
+### WebSocket Protocol
 - Headers (API key, device ID) fetched dynamically at connection time
-- Audio sent as binary frames via `sendAudioData()`, not `sendMessage()`
-- Final packet marked with `isLast: true`
+- Audio sent as binary frames via `sendAudioData()`, NOT `sendMessage()`
+- Final packet marked with `isLast: true` to signal stream end
+- Stream lifecycle: stop recording → `await task.value` → send final packet
 
 ### Audio Pipeline
 - Mic input: Float32 @ 48kHz
 - WebSocket output: PCM S16LE @ 16kHz
 - Conversion via `AudioConverter.floatChannelDataToPCMS16LE()`
+- Call `audioEngine.prepare()` before `audioEngine.start()`
 
 ### macOS Permissions
-- **Microphone**: AVCaptureDevice
-- **Accessibility**: Required for global hotkeys + auto-paste
-- **Sandbox disabled**: Enables global hotkey listening
+| Permission | Purpose | API |
+|------------|---------|-----|
+| Microphone | Audio recording | AVCaptureDevice |
+| Accessibility | Global hotkeys + auto-paste | AXIsProcessTrusted() |
+
+**Sandbox is DISABLED** in entitlements to enable global hotkey listening.
 
 ## DEPENDENCIES
 
@@ -146,3 +156,4 @@ public enum ServiceError: LocalizedError, Sendable {
 - **iOS app**: Minimal template, not developed
 - **No CI/CD**: Manual build scripts only
 - **SmartPhrasesPage.swift**: Largest file (1004 lines) - main UI complexity
+- **Permission polling**: Uses `Task.sleep` with 1s intervals, max 120s timeout

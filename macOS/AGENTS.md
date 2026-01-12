@@ -27,7 +27,6 @@ macOS/
 │   └── HistoryRecord.swift     # Transcription history
 ├── Views/
 │   ├── Root/RootView.swift         # Permission -> Dashboard routing
-│   ├── PermissionRequestView.swift # Permission onboarding
 │   ├── Dashboard/
 │   │   ├── DashboardView.swift     # Main container
 │   │   ├── Components/             # Sidebar, settings sections
@@ -60,30 +59,32 @@ macOS/
 | Settings | `Views/Dashboard/Pages/SettingsPage.swift` | All user preferences |
 | History | `Views/Dashboard/Pages/HistoryPage.swift` | Transcription log |
 
+## PUSH-TO-TALK FLOW
+
+```
+1. User presses hotkey (Fn or custom)
+2. HotkeyManager fires callback
+3. PushToTalkService.startRecording()
+4. RecordingCoordinator starts AudioService + SpeechRecognitionService
+5. Audio streamed via WebSocket as binary frames
+6. Recognition results arrive via AsyncStream
+7. SmartPhraseService checks triggers ("over" command)
+8. TextInputService pastes final text
+```
+
 ## KEY PATTERNS
 
 ### Service Singletons
 ```swift
-@Observable
-@MainActor
-final class PushToTalkService {
+@Observable @MainActor final class PushToTalkService {
     static let shared = PushToTalkService()
     private init() { ... }
 }
 ```
 
-### Notification-Based Updates
-```swift
-extension Notification.Name {
-    static let historyRecordAdded = Notification.Name("historyRecordAdded")
-    static let hotkeyConfigurationChanged = Notification.Name("hotkeyConfigurationChanged")
-}
-```
-
 ### Environment Injection
 ```swift
-@main
-struct macOSApp: App {
+@main struct macOSApp: App {
     var body: some Scene {
         WindowGroup {
             RootView()
@@ -94,16 +95,13 @@ struct macOSApp: App {
 }
 ```
 
-## PUSH-TO-TALK FLOW
-
-1. User presses hotkey (Fn or custom)
-2. `HotkeyManager` fires callback
-3. `PushToTalkService.startRecording()` called
-4. `RecordingCoordinator` starts `AudioService` + `SpeechRecognitionService`
-5. Audio streamed via WebSocket as binary frames
-6. Recognition results arrive via `AsyncStream`
-7. `SmartPhraseService` checks for triggers ("over" command)
-8. `TextInputService` pastes final text
+### Notification-Based Updates
+```swift
+extension Notification.Name {
+    static let historyRecordAdded = Notification.Name("historyRecordAdded")
+    static let hotkeyConfigurationChanged = Notification.Name("hotkeyConfigurationChanged")
+}
+```
 
 ## BUILD
 
@@ -136,6 +134,7 @@ APP_PATH="build/export/MicOver.app" ./build-dmg.sh
 
 ## ANTI-PATTERNS
 
-- Never call `AXIsProcessTrusted()` on main thread - use async version
+- Never call `AXIsProcessTrusted()` on main thread - use `checkAccessibilityPermissionAsync()`
 - Never use `Timer.scheduledTimer` - use `Task.sleep`
-- Never modify UI state from background threads
+- Never modify UI state from background threads - use `@MainActor`
+- Never use `DispatchQueue.main.async` for delays - use `Task.sleep` (exception: clipboard restore timing)

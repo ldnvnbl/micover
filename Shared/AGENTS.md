@@ -44,9 +44,7 @@ Sources/Shared/
 
 ### Singleton Services
 ```swift
-@Observable
-@MainActor
-public final class AudioDeviceManager {
+@Observable @MainActor public final class AudioDeviceManager {
     public static let shared = AudioDeviceManager()
     private init() { ... }
 }
@@ -74,6 +72,18 @@ public func recognitionResults() -> AsyncStream<SpeechRecognitionResult> {
 }
 ```
 
+## AUDIO PIPELINE
+
+```
+Microphone → AVAudioEngine (Float32 @ 48kHz)
+    ↓
+AudioConverter.floatChannelDataToPCMS16LE()
+    ↓
+PCM S16LE @ 16kHz → WebSocket binary frames
+```
+
+**Critical**: Call `audioEngine.prepare()` before `audioEngine.start()` to avoid initialization issues.
+
 ## BUILD
 
 ```bash
@@ -100,5 +110,6 @@ import UIKit
 ## ANTI-PATTERNS
 
 - Never use callbacks - use async/await
-- Never force unwrap
+- Never force unwrap (exception: `SpeechProtocol.swift:34` static URL)
 - Never suppress errors with empty catch blocks
+- Never use `sendMessage()` for audio - use `sendAudioData()`
