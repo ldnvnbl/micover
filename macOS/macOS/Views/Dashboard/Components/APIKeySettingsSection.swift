@@ -10,6 +10,7 @@ struct APIKeySettingsSection: View {
     @State private var isTesting: Bool = false
     @State private var testResult: TestResult?
     @State private var showTestAlert: Bool = false
+    @FocusState private var isApiKeyFocused: Bool
     
     private let apiKeyStorage = APIKeyStorage.shared
     @Environment(SpeechRecognitionService.self) var speechService
@@ -62,13 +63,16 @@ struct APIKeySettingsSection: View {
                         Group {
                             if showKey {
                                 TextField("请输入 API Key", text: $apiKey)
+                                    .onSubmit { saveKeyIfNeeded() }
                             } else {
                                 SecureField("请输入 API Key", text: $apiKey)
+                                    .onSubmit { saveKeyIfNeeded() }
                             }
                         }
                         .textFieldStyle(.roundedBorder)
                         .controlSize(.regular)
                         .frame(width: 280)
+                        .focused($isApiKeyFocused)
                         
                         Button {
                             showKey.toggle()
@@ -142,19 +146,6 @@ struct APIKeySettingsSection: View {
                     .buttonStyle(.bordered)
                     .controlSize(.regular)
                     .disabled(apiKey.isEmpty || isTesting)
-
-                    // 保存按钮
-                    Button {
-                        saveKey()
-                    } label: {
-                        HStack(spacing: 8) {
-                            Image(systemName: "square.and.arrow.down")
-                            Text("保存")
-                        }
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .controlSize(.regular)
-                    .disabled(apiKey.isEmpty)
                 }
                 .padding(.horizontal, 16)
                 .padding(.vertical, 12)
@@ -170,6 +161,14 @@ struct APIKeySettingsSection: View {
         }
         .onAppear {
             loadKey()
+        }
+        .onChange(of: isApiKeyFocused) { _, isFocused in
+            if !isFocused {
+                saveKeyIfNeeded()
+            }
+        }
+        .onChange(of: selectedResourceId) { _, _ in
+            saveKeyIfNeeded()
         }
         .alert("连接测试", isPresented: $showTestAlert) {
             Button("确定", role: .cancel) {}
@@ -190,6 +189,17 @@ struct APIKeySettingsSection: View {
     private func loadKey() {
         apiKey = apiKeyStorage.apiKey ?? ""
         selectedResourceId = apiKeyStorage.resourceId
+    }
+    
+    private func saveKeyIfNeeded() {
+        let storedApiKey = apiKeyStorage.apiKey ?? ""
+        let storedResourceId = apiKeyStorage.resourceId
+        
+        guard apiKey != storedApiKey || selectedResourceId != storedResourceId else {
+            return
+        }
+        
+        saveKey()
     }
     
     private func saveKey() {
