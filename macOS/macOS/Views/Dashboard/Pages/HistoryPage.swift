@@ -1,10 +1,98 @@
 import SwiftUI
 
+/// 日期分组数据
+private struct DateGroup: Identifiable {
+    let id: String  // 日期字符串作为唯一标识
+    let date: Date
+    let records: [HistoryRecord]
+    let displayText: String  // 预计算的显示文本
+
+    // MARK: - 静态 DateFormatter 缓存
+
+    private static let weekdayFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "zh_CN")
+        f.dateFormat = "EEEE"
+        return f
+    }()
+
+    private static let dateFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "zh_CN")
+        f.dateFormat = "M月d日 EEEE"
+        return f
+    }()
+
+    private static let fullDateFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "zh_CN")
+        f.dateFormat = "yyyy年M月d日 EEEE"
+        return f
+    }()
+
+    // MARK: - 初始化
+
+    init(id: String, date: Date, records: [HistoryRecord]) {
+        self.id = id
+        self.date = date
+        self.records = records
+        self.displayText = Self.formatDate(date)
+    }
+
+    /// 格式化日期显示
+    private static func formatDate(_ date: Date) -> String {
+        let calendar = Calendar.current
+        let now = Date()
+
+        if calendar.isDateInToday(date) {
+            return "今天"
+        } else if calendar.isDateInYesterday(date) {
+            return "昨天"
+        } else if let dayBeforeYesterday = calendar.date(byAdding: .day, value: -2, to: now),
+                  calendar.isDate(date, inSameDayAs: dayBeforeYesterday) {
+            return "前天"
+        } else {
+            // 检查是否在本周内（3-6天前）
+            let weekAgo = calendar.date(byAdding: .day, value: -7, to: now) ?? now
+            if date > weekAgo {
+                return weekdayFormatter.string(from: date)
+            } else if calendar.component(.year, from: date) == calendar.component(.year, from: now) {
+                return dateFormatter.string(from: date)
+            } else {
+                return fullDateFormatter.string(from: date)
+            }
+        }
+    }
+}
+
 /// 历史记录页面
 struct HistoryPage: View {
     @State private var records: [HistoryRecord] = []
+    @State private var groupedRecords: [DateGroup] = []
     @State private var settings: HistorySettings = HistoryStorage.shared.getSettings()
     @State private var showClearConfirmation = false
+    @State private var isLoading = false
+    @State private var isLoadingMore = false
+    @State private var hasMore = true
+    @State private var loadedWeekKeys: [String] = []  // 已加载的周 key
+    private let pageSize = 50
+
+    /// 更新分组数据
+    private func updateGroupedRecords() {
+        let calendar = Calendar.current
+        let grouped = Dictionary(grouping: records) { record -> Date in
+            calendar.startOfDay(for: record.timestamp)
+        }
+
+        groupedRecords = grouped.map { date, records in
+            DateGroup(
+                id: ISO8601DateFormatter().string(from: date),
+                date: date,
+                records: records.sorted { $0.timestamp > $1.timestamp }
+            )
+        }
+        .sorted { $0.date > $1.date }
+    }
     
     var body: some View {
         VStack(spacing: 0) {
@@ -23,7 +111,13 @@ struct HistoryPage: View {
             .frame(maxWidth: .infinity, alignment: .center)
             
             // 滚动区域（边框在外层容器，不随内容滚动）
-            if records.isEmpty {
+            if isLoading {
+                loadingView
+                    .padding(.horizontal, 32)
+                    .padding(.bottom, 32)
+                    .frame(maxWidth: 800)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+            } else if records.isEmpty {
                 emptyStateView
                     .padding(.horizontal, 32)
                     .padding(.bottom, 32)
@@ -225,37 +319,165 @@ struct HistoryPage: View {
     }
     
     // MARK: - Records List
-    
+
     /// 记录列表内容（不带边框，用于 ScrollView 内部）
     private var recordsListContent: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            ForEach(records) { record in
-                HistoryRecordRow(record: record) {
-                    deleteRecord(record)
+        LazyVStack(alignment: .leading, spacing: 0, pinnedViews: [.sectionHeaders]) {
+            ForEach(groupedRecords) { group in
+                Section {
+                    ForEach(group.records) { record in
+                        HistoryRecordRow(record: record) {
+                            deleteRecord(record)
+                        }
+                        .onAppear {
+                            loadMoreIfNeeded(currentRecord: record)
+                        }
+
+                        // 分割线（除了每组最后一条）
+                        if record.id != group.records.last?.id {
+                            Divider()
+                                .padding(.leading, 80)
+                        }
+                    }
+                } header: {
+                    HistorySectionHeader(text: group.displayText)
                 }
-                
-                if record.id != records.last?.id {
-                    Divider()
-                        .padding(.leading, 80)
+            }
+
+            // 加载更多指示器
+            if isLoadingMore {
+                HStack {
+                    Spacer()
+                    ProgressIndicator()
+                        .scaleEffect(0.5)
+                    Text("加载更多...")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                    Spacer()
                 }
+                .padding(.vertical, 12)
             }
         }
     }
-    
+
+    /// 加载状态视图
+    private var loadingView: some View {
+        VStack(spacing: 12) {
+            ProgressIndicator()
+            Text("加载中...")
+                .font(.subheadline)
+                .foregroundColor(.secondary)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 60)
+        .background(
+            RoundedRectangle(cornerRadius: 10)
+                .fill(Color(NSColor.controlBackgroundColor))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 10)
+                .stroke(Color(NSColor.separatorColor), lineWidth: 0.5)
+        )
+    }
+
+    /// 检查是否需要加载更多
+    private func loadMoreIfNeeded(currentRecord: HistoryRecord) {
+        // 当滚动到最后 5 条时开始加载
+        guard hasMore, !isLoadingMore else { return }
+
+        let thresholdIndex = max(0, records.count - 5)
+        if let currentIndex = records.firstIndex(where: { $0.id == currentRecord.id }),
+           currentIndex >= thresholdIndex {
+            loadMore()
+        }
+    }
+
+    /// 加载更多记录（按周增量加载）
+    private func loadMore() {
+        guard hasMore, !isLoadingMore else { return }
+
+        isLoadingMore = true
+
+        Task {
+            let result = await HistoryStorage.shared.loadRecordsByWeekAsync(
+                loadedWeekKeys: loadedWeekKeys,
+                limit: pageSize
+            )
+            await MainActor.run {
+                records.append(contentsOf: result.records)
+                hasMore = result.hasMore
+                loadedWeekKeys = result.loadedWeekKeys
+                isLoadingMore = false
+                updateGroupedRecords()
+            }
+        }
+    }
+
     private func deleteRecord(_ record: HistoryRecord) {
         HistoryStorage.shared.deleteRecord(id: record.id)
-        loadRecords()
+        // 直接从本地数组移除，无需重新加载
+        records.removeAll { $0.id == record.id }
+        updateGroupedRecords()
     }
-    
+
     // MARK: - Methods
-    
+
+    /// 初始加载（按周增量加载）
     private func loadRecords() {
-        records = HistoryStorage.shared.loadAllRecords()
+        guard !isLoading else { return }
+
+        isLoading = true
+        hasMore = true
+        loadedWeekKeys = []  // 重置已加载的周
+
+        Task {
+            let result = await HistoryStorage.shared.loadRecordsByWeekAsync(
+                loadedWeekKeys: [],
+                limit: pageSize
+            )
+            await MainActor.run {
+                records = result.records
+                hasMore = result.hasMore
+                loadedWeekKeys = result.loadedWeekKeys
+                isLoading = false
+                updateGroupedRecords()
+            }
+        }
     }
-    
+
     private func clearAllRecords() {
         HistoryStorage.shared.clearAllRecords()
-        loadRecords()
+        records = []
+        groupedRecords = []
+        hasMore = false
+        loadedWeekKeys = []
+    }
+}
+
+// MARK: - Progress Indicator
+
+private struct ProgressIndicator: View {
+    var body: some View {
+        ProgressView()
+            .progressViewStyle(.circular)
+            .controlSize(.small)
+    }
+}
+
+// MARK: - History Section Header
+
+/// 日期分组头视图（粘性）
+private struct HistorySectionHeader: View {
+    let text: String
+
+    var body: some View {
+        Text(text)
+            .font(.system(size: 13, weight: .semibold))
+            .foregroundColor(.secondary)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 8)
+            .background(Color(NSColor.controlBackgroundColor))
     }
 }
 

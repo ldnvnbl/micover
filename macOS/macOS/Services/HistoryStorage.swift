@@ -75,18 +75,176 @@ final class HistoryStorage {
         NotificationCenter.default.post(name: .historyRecordAdded, object: nil)
     }
     
-    /// 加载所有记录（按时间倒序）
+    /// 加载所有记录（按时间倒序）- 同步版本
     func loadAllRecords() -> [HistoryRecord] {
         let allKeys = getAllWeekKeys()
         var allRecords: [HistoryRecord] = []
-        
+
         for key in allKeys {
             let records = loadRecords(forKey: key)
             allRecords.append(contentsOf: records)
         }
-        
+
         // 按时间倒序排列
         return allRecords.sorted { $0.timestamp > $1.timestamp }
+    }
+
+    /// 异步分页加载记录（在后台线程执行 JSON 解码）
+    nonisolated func loadRecordsAsync(offset: Int = 0, limit: Int = 50) async -> (records: [HistoryRecord], hasMore: Bool) {
+        // 在主线程获取必要的数据
+        let userDefaults = UserDefaults.standard
+        let allKeys = userDefaults.dictionaryRepresentation().keys
+            .filter { $0.hasPrefix("history.") && $0.contains("-W") }
+
+        // 收集所有周的数据（在主线程读取 UserDefaults）
+        var allData: [(key: String, data: Data)] = []
+        for key in allKeys {
+            if let data = userDefaults.data(forKey: key) {
+                allData.append((key, data))
+            }
+        }
+
+        // 在后台线程执行 JSON 解码和排序
+        return await Task.detached(priority: .userInitiated) {
+            var allRecords: [HistoryRecord] = []
+            let decoder = JSONDecoder()
+
+            for (key, data) in allData {
+                do {
+                    let records = try decoder.decode([HistoryRecord].self, from: data)
+                    allRecords.append(contentsOf: records)
+                } catch {
+                    print("❌ Failed to decode history records for \(key): \(error)")
+                }
+            }
+
+            // 排序
+            let sortedRecords = allRecords.sorted { $0.timestamp > $1.timestamp }
+
+            // 分页
+            let totalCount = sortedRecords.count
+            let endIndex = min(offset + limit, totalCount)
+            let hasMore = endIndex < totalCount
+
+            let pageRecords = offset < totalCount ? Array(sortedRecords[offset..<endIndex]) : []
+            return (pageRecords, hasMore)
+        }.value
+    }
+
+    /// 异步获取记录总数
+    nonisolated func getRecordCountAsync() async -> Int {
+        let userDefaults = UserDefaults.standard
+        let allKeys = userDefaults.dictionaryRepresentation().keys
+            .filter { $0.hasPrefix("history.") && $0.contains("-W") }
+
+        var allData: [Data] = []
+        for key in allKeys {
+            if let data = userDefaults.data(forKey: key) {
+                allData.append(data)
+            }
+        }
+
+        return await Task.detached(priority: .userInitiated) {
+            var count = 0
+            let decoder = JSONDecoder()
+
+            for data in allData {
+                if let records = try? decoder.decode([HistoryRecord].self, from: data) {
+                    count += records.count
+                }
+            }
+
+            return count
+        }.value
+    }
+
+    /// 按周增量加载记录（只加载必要的周数据）
+    /// - Parameters:
+    ///   - loadedWeekKeys: 已加载的周 key 列表（用于继续加载）
+    ///   - limit: 需要加载的记录数
+    /// - Returns: (records, hasMore, loadedWeekKeys)
+    nonisolated func loadRecordsByWeekAsync(
+        loadedWeekKeys: [String] = [],
+        limit: Int = 50
+    ) async -> (records: [HistoryRecord], hasMore: Bool, loadedWeekKeys: [String]) {
+        let userDefaults = UserDefaults.standard
+
+        // 1. 获取所有周 key 并按时间倒序排序
+        let allWeekKeys = userDefaults.dictionaryRepresentation().keys
+            .filter { $0.hasPrefix("history.") && $0.contains("-W") }
+            .sorted { $0 > $1 }  // 倒序：2026-W03 > 2026-W02 > 2026-W01
+
+        // 2. 找出未加载的周（保持倒序）
+        let unloadedKeys = allWeekKeys.filter { !loadedWeekKeys.contains($0) }
+
+        // 3. 逐周读取数据
+        var weekDataList: [(key: String, data: Data)] = []
+        for weekKey in unloadedKeys {
+            if let data = userDefaults.data(forKey: weekKey) {
+                weekDataList.append((weekKey, data))
+            }
+        }
+
+        // 4. 在后台线程执行 JSON 解码
+        return await Task.detached(priority: .userInitiated) {
+            var records: [HistoryRecord] = []
+            var newLoadedKeys = loadedWeekKeys
+            let decoder = JSONDecoder()
+
+            for (weekKey, data) in weekDataList {
+                if let weekRecords = try? decoder.decode([HistoryRecord].self, from: data) {
+                    records.append(contentsOf: weekRecords)
+                    newLoadedKeys.append(weekKey)
+                }
+
+                // 如果已经超过 limit，停止加载更多周
+                if records.count >= limit {
+                    break
+                }
+            }
+
+            // 5. 排序（只对本次加载的记录排序）
+            records.sort { $0.timestamp > $1.timestamp }
+
+            // 6. 判断是否还有更多
+            let hasMore = newLoadedKeys.count < allWeekKeys.count || records.count > limit
+
+            // 7. 返回结果（如果超过 limit，只返回 limit 条）
+            let resultRecords = records.count > limit ? Array(records.prefix(limit)) : records
+
+            return (resultRecords, hasMore, newLoadedKeys)
+        }.value
+    }
+
+    /// 分页加载记录（同步版本，保留兼容性）
+    func loadRecords(offset: Int = 0, limit: Int = 50) -> [HistoryRecord] {
+        let allKeys = getAllWeekKeys()
+        var allRecords: [HistoryRecord] = []
+
+        // 收集所有记录
+        for key in allKeys {
+            let records = loadRecords(forKey: key)
+            allRecords.append(contentsOf: records)
+        }
+
+        // 排序并分页
+        let sortedRecords = allRecords.sorted { $0.timestamp > $1.timestamp }
+        let endIndex = min(offset + limit, sortedRecords.count)
+
+        return offset < sortedRecords.count ? Array(sortedRecords[offset..<endIndex]) : []
+    }
+    
+    /// 获取记录总数
+    func getRecordCount() -> Int {
+        let allKeys = getAllWeekKeys()
+        var count = 0
+        
+        for key in allKeys {
+            let records = loadRecords(forKey: key)
+            count += records.count
+        }
+        
+        return count
     }
     
     /// 删除单条记录
@@ -147,19 +305,6 @@ final class HistoryStorage {
         if deletedCount > 0 {
             print("🧹 Cleaned up \(deletedCount) expired history weeks")
         }
-    }
-    
-    /// 获取记录总数
-    func getRecordCount() -> Int {
-        let allKeys = getAllWeekKeys()
-        var count = 0
-        
-        for key in allKeys {
-            let records = loadRecords(forKey: key)
-            count += records.count
-        }
-        
-        return count
     }
     
     // MARK: - Export
