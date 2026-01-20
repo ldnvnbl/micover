@@ -104,6 +104,10 @@ iOSInjectionProject/
 # Release folder
 macOS/Release/
 
+# Build artifacts
+macOS/build/
+*.xcarchive
+
 # Environment variables
 .env
 macOS/.env
