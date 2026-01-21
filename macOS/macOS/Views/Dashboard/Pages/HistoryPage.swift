@@ -5,16 +5,8 @@ private struct DateGroup: Identifiable {
     let id: String  // 日期字符串作为唯一标识
     let date: Date
     let records: [HistoryRecord]
-    let displayText: String  // 预计算的显示文本
 
     // MARK: - 静态 DateFormatter 缓存
-
-    private static let weekdayFormatter: DateFormatter = {
-        let f = DateFormatter()
-        f.locale = Locale(identifier: "zh_CN")
-        f.dateFormat = "EEEE"
-        return f
-    }()
 
     private static let dateFormatter: DateFormatter = {
         let f = DateFormatter()
@@ -36,13 +28,17 @@ private struct DateGroup: Identifiable {
         self.id = id
         self.date = date
         self.records = records
-        self.displayText = Self.formatDate(date)
     }
 
     /// 格式化日期显示
-    private static func formatDate(_ date: Date) -> String {
+    func displayText(referenceDate: Date) -> String {
+        Self.formatDate(date, referenceDate: referenceDate)
+    }
+
+    /// 格式化日期显示
+    private static func formatDate(_ date: Date, referenceDate: Date) -> String {
         let calendar = Calendar.current
-        let now = Date()
+        let now = referenceDate
 
         if calendar.isDateInToday(date) {
             return "今天"
@@ -52,14 +48,10 @@ private struct DateGroup: Identifiable {
                   calendar.isDate(date, inSameDayAs: dayBeforeYesterday) {
             return "前天"
         } else {
-            // 检查是否在本周内（3-6天前）
-            let weekAgo = calendar.date(byAdding: .day, value: -7, to: now) ?? now
-            if date > weekAgo {
-                return weekdayFormatter.string(from: date)
-            } else if calendar.component(.year, from: date) == calendar.component(.year, from: now) {
-                return dateFormatter.string(from: date)
+            if calendar.component(.year, from: date) == calendar.component(.year, from: now) {
+                return dateFormatter.string(from: date)  // "1月16日 星期四"
             } else {
-                return fullDateFormatter.string(from: date)
+                return fullDateFormatter.string(from: date)  // "2025年1月16日 星期四"
             }
         }
     }
@@ -70,6 +62,7 @@ struct HistoryPage: View {
     @State private var records: [HistoryRecord] = []
     @State private var groupedRecords: [DateGroup] = []
     @State private var settings: HistorySettings = HistoryStorage.shared.getSettings()
+    @State private var now = Date()
     @State private var showClearConfirmation = false
     @State private var isLoading = false
     @State private var isLoadingMore = false
@@ -83,10 +76,11 @@ struct HistoryPage: View {
         let grouped = Dictionary(grouping: records) { record -> Date in
             calendar.startOfDay(for: record.timestamp)
         }
+        let idFormatter = ISO8601DateFormatter()
 
         groupedRecords = grouped.map { date, records in
             DateGroup(
-                id: ISO8601DateFormatter().string(from: date),
+                id: idFormatter.string(from: date),
                 date: date,
                 records: records.sorted { $0.timestamp > $1.timestamp }
             )
@@ -148,6 +142,9 @@ struct HistoryPage: View {
         }
         .onReceive(NotificationCenter.default.publisher(for: .historyRecordAdded)) { _ in
             loadRecords()
+        }
+        .task {
+            await scheduleMidnightRefresh()
         }
         .alert("确认清空", isPresented: $showClearConfirmation) {
             Button("取消", role: .cancel) {}
@@ -340,7 +337,7 @@ struct HistoryPage: View {
                         }
                     }
                 } header: {
-                    HistorySectionHeader(text: group.displayText)
+                    HistorySectionHeader(text: group.displayText(referenceDate: now))
                 }
             }
 
@@ -452,6 +449,29 @@ struct HistoryPage: View {
         hasMore = false
         loadedWeekKeys = []
     }
+
+    private func scheduleMidnightRefresh() async {
+        while !Task.isCancelled {
+            let calendar = Calendar.current
+            let current = Date()
+            guard let nextMidnight = calendar.nextDate(
+                after: current,
+                matching: DateComponents(hour: 0, minute: 0, second: 0),
+                matchingPolicy: .nextTime
+            ) else {
+                return
+            }
+
+            let interval = nextMidnight.timeIntervalSince(current)
+            if interval > 0 {
+                try? await Task.sleep(nanoseconds: UInt64(interval * 1_000_000_000))
+            }
+
+            await MainActor.run {
+                now = Date()
+            }
+        }
+    }
 }
 
 // MARK: - Progress Indicator
@@ -491,6 +511,12 @@ struct HistoryRecordRow: View {
     @State private var isHoveringCopy = false
     @State private var isHoveringDelete = false
     @State private var showCopiedFeedback = false
+
+    private static let timeFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "HH:mm"
+        return formatter
+    }()
     
     var body: some View {
         HStack(alignment: .center, spacing: 16) {
@@ -570,9 +596,7 @@ struct HistoryRecordRow: View {
     }
     
     private var formattedTime: String {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "HH:mm"
-        return formatter.string(from: record.timestamp)
+        Self.timeFormatter.string(from: record.timestamp)
     }
     
     private func copyToClipboard() {

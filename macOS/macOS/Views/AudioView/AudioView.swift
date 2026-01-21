@@ -96,7 +96,7 @@ struct AudioBar: View {
                     height = CGFloat.random(in: minHeight...maxHeight)
                 }
             }
-            .onChange(of: isAnimating) { newValue in
+            .onChange(of: isAnimating) { _, newValue in
                 if newValue {
                     height = CGFloat.random(in: minHeight...maxHeight)
                 } else {
