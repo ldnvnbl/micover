@@ -98,18 +98,64 @@ public final class StatsStorage: Sendable {
         transcribedWords: Int? = nil
     ) {
         var stats = getTodayStats()
-        
+
         if let duration = recordingDuration {
             stats.totalRecordingDuration += duration
         }
-        
+
         if let words = transcribedWords {
             stats.totalTranscribedWords += words
         }
-        
+
         saveTodayStats(stats)
     }
-    
+
+    /// 获取指定天数范围内的统计数据（按日期倒序）
+    /// - Parameter days: 天数（7、30、90）
+    /// - Returns: 日期范围内每天的统计数据数组
+    public func getStatsForRange(days: Int) -> [DailyStats] {
+        let allStats = loadAllStats()
+        let calendar = Calendar.current
+        let today = Date()
+
+        var result: [DailyStats] = []
+
+        // 从今天往前遍历指定天数
+        for dayOffset in 0..<days {
+            guard let date = calendar.date(byAdding: .day, value: -dayOffset, to: today) else {
+                continue
+            }
+            let dateKey = DailyStats.dateKey(for: date)
+
+            if let stats = allStats[dateKey] {
+                result.append(stats)
+            } else {
+                // 没有数据的日期返回空统计
+                result.append(DailyStats(date: dateKey))
+            }
+        }
+
+        // 反转使日期从早到晚排序
+        return result.reversed()
+    }
+
+    /// 获取指定天数范围内的汇总统计
+    /// - Parameter days: 天数（7、30、90）
+    /// - Returns: 汇总后的统计数据
+    public func getSummaryForRange(days: Int) -> DailyStats {
+        let stats = getStatsForRange(days: days)
+
+        var summary = DailyStats(date: "summary")
+        for stat in stats {
+            summary.recordingCount += stat.recordingCount
+            summary.totalRecordingDuration += stat.totalRecordingDuration
+            summary.totalTranscribedWords += stat.totalTranscribedWords
+            summary.smartPhraseTriggeredCount += stat.smartPhraseTriggeredCount
+        }
+
+        return summary
+    }
+
     // MARK: - Private
     
     private func loadAllStats() -> [String: DailyStats] {
