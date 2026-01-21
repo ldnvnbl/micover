@@ -5,42 +5,60 @@ import Shared
 struct HomePage: View {
     @Environment(PushToTalkService.self) var pushToTalkService
     @Environment(AppState.self) var appState
-    
+
     @State private var hotkeyConfiguration = SettingsStorage.shared.loadHotkeyConfiguration()
     @State private var isPulsing = false
 
+    // 趋势图表状态
+    @State private var selectedMetric: TrendMetric = .recordingCount
+    @State private var selectedTimeRange: TimeRange = .week
+    @State private var trendData: [DailyStats] = []
+
     var body: some View {
-        VStack(spacing: 0) {
-            // 固定区域
+        ScrollView {
             VStack(alignment: .leading, spacing: 24) {
                 // 页面标题
                 Text("首页")
                     .font(.largeTitle)
                     .fontWeight(.bold)
-                
+
                 // 语音输入卡片
                 voiceInputCard
-                
+
                 // 今日统计卡片
                 statsCard
+
+                // 趋势图表卡片
+                TrendChartCard(
+                    selectedMetric: $selectedMetric,
+                    selectedTimeRange: $selectedTimeRange,
+                    data: trendData
+                )
             }
             .padding(.horizontal, 32)
             .padding(.top, 32)
             .padding(.bottom, 32)
             .frame(maxWidth: 800)
             .frame(maxWidth: .infinity, alignment: .center)
-            
-            Spacer()
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Color(NSColor.windowBackgroundColor))
         .onAppear {
             appState.loadTodayStats()
             hotkeyConfiguration = SettingsStorage.shared.loadHotkeyConfiguration()
+            loadTrendData()
         }
         .onReceive(NotificationCenter.default.publisher(for: .hotkeyConfigurationChanged)) { _ in
             hotkeyConfiguration = SettingsStorage.shared.loadHotkeyConfiguration()
         }
+        .onChange(of: selectedTimeRange) { _, _ in
+            loadTrendData()
+        }
+    }
+
+    /// 加载趋势数据
+    private func loadTrendData() {
+        trendData = StatsStorage.shared.getStatsForRange(days: selectedTimeRange.rawValue)
     }
     
     // MARK: - 语音输入卡片
