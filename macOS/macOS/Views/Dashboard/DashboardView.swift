@@ -53,6 +53,8 @@ struct DashboardView: View {
             HistoryPage()
         case .smartPhrases:
             SmartPhrasesPage()
+        case .customWords:
+            CustomWordsPage()
         case .settings:
             SettingsPage()
         }

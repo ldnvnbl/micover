@@ -7,13 +7,17 @@ import Observation
 public final class SpeechRecognitionService {
     public private(set) var isConnected = false
     public private(set) var connectionStatus = "未连接"
-    
+
     private let apiKeyStorage: APIKeyStorage
     private let keychainManager: KeychainManager
     private var webSocketTask: URLSessionWebSocketTask?
     private let session: URLSession
     private var resultContinuation: AsyncStream<SpeechRecognitionResult>.Continuation?
     private var currentSeq: Int32 = 1
+
+    /// 热词 JSON 字符串提供者
+    /// 外部可以设置此闭包来动态提供热词
+    public var hotwordsProvider: (() -> String?)?
     
     public init(apiKeyStorage: APIKeyStorage, keychainManager: KeychainManager) {
         self.apiKeyStorage = apiKeyStorage
@@ -146,23 +150,39 @@ public final class SpeechRecognitionService {
     
     private func sendFullClientRequest() async throws {
         let deviceId = try keychainManager.getOrCreateDeviceID()
-        
+
+        // 获取热词 JSON（如果有提供者）
+        let hotwordsJSON = hotwordsProvider?()
+
+        // Debug: 打印热词配置状态
+        if let hotwords = hotwordsJSON {
+            print("🔥 Hotwords JSON from provider: \(hotwords)")
+        } else {
+            print("🔥 No hotwords configured")
+        }
+
+        let requestMeta = RequestMeta.bigModelWithHotwords(hotwordsJSON)
+
         let payload = FullClientRequestPayload(
             user: UserMeta(uid: deviceId, platform: "macOS"),
             audio: .defaultPCM,
-            request: .defaultBigModel
+            request: requestMeta
         )
-        
+
         let seq = currentSeq
         currentSeq += 1
-        
+
         let requestData = try SpeechProtocolCodec.buildFullClientRequest(
             seq: seq,
             payload: payload
         )
-        
+
         try await webSocketTask?.send(.data(requestData))
-        print("📤 Sent FullClientRequest (seq=\(seq))")
+        if let hotwords = hotwordsJSON {
+            print("📤 Sent FullClientRequest with hotwords (seq=\(seq)): \(hotwords)")
+        } else {
+            print("📤 Sent FullClientRequest (seq=\(seq))")
+        }
     }
     
     private func receiveOneMessage() async throws -> SpeechProtocolCodec.ParsedResponse {
