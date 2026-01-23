@@ -6,7 +6,6 @@ struct CustomWordsPage: View {
     @State private var showAddSheet = false
     @State private var showBatchAddSheet = false
     @State private var showDeleteAlert = false
-    @State private var showDeleteAllAlert = false
     @State private var wordToEdit: CustomWord?
     @State private var wordToDelete: CustomWord?
 
@@ -71,15 +70,6 @@ struct CustomWordsPage: View {
             if let word = wordToDelete {
                 Text("确定要删除词条「\(word.word)」吗？")
             }
-        }
-        .alert("确认清空", isPresented: $showDeleteAllAlert) {
-            Button("取消", role: .cancel) {}
-            Button("清空", role: .destructive) {
-                CustomWordService.shared.deleteAllWords()
-                loadWords()
-            }
-        } message: {
-            Text("确定要清空个人词库吗？此操作不可撤销。")
         }
     }
 
@@ -157,69 +147,27 @@ struct CustomWordsPage: View {
 
     private var wordListCard: some View {
         VStack(spacing: 0) {
-            // 统计信息和清空按钮
-            HStack {
-                let enabledCount = words.filter { $0.isEnabled }.count
-                HStack(spacing: 0) {
-                    Text("共 ")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                    Text("\(words.count)")
-                        .font(.caption)
-                        .fontWeight(.medium)
-                        .foregroundColor(.accentColor)
-                    Text(" 个词条，")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                    Text("\(enabledCount)")
-                        .font(.caption)
-                        .fontWeight(.medium)
-                        .foregroundColor(.accentColor)
-                    Text(" 个已启用")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                }
-
-                Spacer()
-
-                Button("清空全部") {
-                    showDeleteAllAlert = true
-                }
-                .buttonStyle(.plain)
-                .font(.caption)
-                .foregroundColor(.red.opacity(0.8))
-            }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 10)
-
-            Divider()
-                .padding(.horizontal, 16)
-
-            // 词条列表
-            VStack(spacing: 0) {
-                ForEach(Array(words.enumerated()), id: \.element.id) { index, word in
-                    CustomWordRow(
-                        word: word,
-                        onEdit: {
-                            wordToEdit = word
-                        },
-                        onDelete: {
-                            wordToDelete = word
-                            showDeleteAlert = true
-                        },
-                        onToggle: {
-                            CustomWordService.shared.toggleEnabled(word)
-                            loadWords()
-                        }
-                    )
-
-                    if index < words.count - 1 {
-                        Divider()
-                            .padding(.horizontal, 16)
+            ForEach(Array(words.enumerated()), id: \.element.id) { index, word in
+                CustomWordRow(
+                    word: word,
+                    onEdit: {
+                        wordToEdit = word
+                    },
+                    onDelete: {
+                        wordToDelete = word
+                        showDeleteAlert = true
+                    },
+                    onToggle: {
+                        CustomWordService.shared.toggleEnabled(word)
+                        loadWords()
                     }
+                )
+
+                if index < words.count - 1 {
+                    Divider()
+                        .padding(.leading, 16)
                 }
             }
-            .padding(.vertical, 4)
         }
         .background(
             RoundedRectangle(cornerRadius: 10)
