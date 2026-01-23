@@ -302,32 +302,28 @@ struct CustomWordRow: View {
                 .lineLimit(1)
                 .frame(maxWidth: .infinity, alignment: .leading)
 
-            // Toggle 开关（始终显示）
-            Toggle("", isOn: Binding(
-                get: { word.isEnabled },
-                set: { _ in onToggle() }
-            ))
-            .toggleStyle(.switch)
-            .controlSize(.small)
-            .labelsHidden()
+            // 操作按钮（Hover 时显示）
+            HStack(spacing: 6) {
+                // Toggle 开关
+                Toggle("", isOn: Binding(
+                    get: { word.isEnabled },
+                    set: { _ in onToggle() }
+                ))
+                .toggleStyle(.switch)
+                .labelsHidden()
 
-            // 编辑/删除按钮（Hover 时显示）
-            HStack(spacing: 4) {
                 // 编辑按钮
                 Button(action: onEdit) {
                     Image(systemName: "pencil")
                         .font(.system(size: 11))
                         .foregroundColor(isHoveringEdit ? .primary : .secondary)
-                        .frame(width: 26, height: 26)
-                        .background(
-                            RoundedRectangle(cornerRadius: 6)
-                                .fill(isHoveringEdit ? Color(NSColor.controlColor) : Color.clear)
-                        )
+                        .frame(width: 24, height: 24)
+                        .background(Circle().fill(isHoveringEdit ? Color(NSColor.controlColor) : Color(NSColor.controlBackgroundColor)))
                 }
                 .buttonStyle(.plain)
                 .help("编辑")
                 .onHover { hovering in
-                    withAnimation(.easeInOut(duration: 0.1)) {
+                    withAnimation(.easeInOut(duration: 0.12)) {
                         isHoveringEdit = hovering
                     }
                 }
@@ -337,16 +333,13 @@ struct CustomWordRow: View {
                     Image(systemName: "trash")
                         .font(.system(size: 11))
                         .foregroundColor(isHoveringDelete ? .red : .secondary)
-                        .frame(width: 26, height: 26)
-                        .background(
-                            RoundedRectangle(cornerRadius: 6)
-                                .fill(isHoveringDelete ? Color.red.opacity(0.1) : Color.clear)
-                        )
+                        .frame(width: 24, height: 24)
+                        .background(Circle().fill(isHoveringDelete ? Color(NSColor.controlColor) : Color(NSColor.controlBackgroundColor)))
                 }
                 .buttonStyle(.plain)
                 .help("删除")
                 .onHover { hovering in
-                    withAnimation(.easeInOut(duration: 0.1)) {
+                    withAnimation(.easeInOut(duration: 0.12)) {
                         isHoveringDelete = hovering
                     }
                 }
@@ -354,13 +347,10 @@ struct CustomWordRow: View {
             .opacity(isHovering ? 1 : 0)
         }
         .padding(.horizontal, 16)
-        .padding(.vertical, 8)
+        .padding(.vertical, 10)
         .contentShape(Rectangle())
-        .background(
-            RoundedRectangle(cornerRadius: 6)
-                .fill(isHovering ? Color.accentColor.opacity(0.08) : Color.clear)
-                .padding(.horizontal, 8)
-        )
+        .background(isHovering ? Color(NSColor.controlBackgroundColor).opacity(0.5) : Color.clear)
+        .opacity(word.isEnabled ? 1 : 0.6)
         .onHover { hovering in
             withAnimation(.easeInOut(duration: 0.15)) {
                 isHovering = hovering
