@@ -148,8 +148,9 @@ struct HomePage: View {
                 .foregroundColor(.secondary)
                 .padding(.leading, 4)
 
-            // 第一行：2 列
-            LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
+            // 统计卡片网格：3 列布局
+            LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
+                // 第一行
                 statCard(
                     icon: "mic.fill",
                     title: "录音次数",
@@ -165,10 +166,7 @@ struct HomePage: View {
                     unit: formatDurationUnit(appState.totalRecordingDuration),
                     color: .green
                 )
-            }
 
-            // 第二行：3 列
-            LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
                 statCard(
                     icon: "text.bubble.fill",
                     title: "转写字数",
@@ -177,6 +175,7 @@ struct HomePage: View {
                     color: .purple
                 )
 
+                // 第二行
                 statCard(
                     icon: "speedometer",
                     title: "输入速度",
@@ -192,6 +191,9 @@ struct HomePage: View {
                     unit: "次",
                     color: .pink
                 )
+
+                // 占位（空卡片）
+                Color.clear
             }
         }
     }
