@@ -1,7 +1,7 @@
 import Foundation
 
-/// 自定义词典存储服务
-/// 负责自定义词条的持久化存储
+/// 个人词库存储服务
+/// 负责词条的持久化存储
 @MainActor
 final class CustomWordStorage {
     static let shared = CustomWordStorage()

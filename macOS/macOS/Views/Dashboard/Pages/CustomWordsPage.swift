@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// 易错词管理页面
+/// 个人词库管理页面
 struct CustomWordsPage: View {
     @State private var words: [CustomWord] = []
     @State private var showAddSheet = false
@@ -23,6 +23,9 @@ struct CustomWordsPage: View {
                 } else {
                     wordListCard
                 }
+
+                // 使用提示
+                usageTipsView
             }
             .padding(.horizontal, 32)
             .padding(.top, 32)
@@ -79,7 +82,7 @@ struct CustomWordsPage: View {
                 loadWords()
             }
         } message: {
-            Text("确定要删除所有易错词吗？此操作不可撤销。")
+            Text("确定要清空个人词库吗？此操作不可撤销。")
         }
     }
 
@@ -88,11 +91,11 @@ struct CustomWordsPage: View {
     private var headerSection: some View {
         HStack {
             VStack(alignment: .leading, spacing: 4) {
-                Text("易错词")
+                Text("个人词库")
                     .font(.largeTitle)
                     .fontWeight(.bold)
 
-                Text("添加容易识别错误的词语，提高识别准确率")
+                Text("添加人名、品牌名等词语，提高识别准确率")
                     .font(.subheadline)
                     .foregroundColor(.secondary)
             }
@@ -135,15 +138,15 @@ struct CustomWordsPage: View {
 
     private var emptyStateView: some View {
         VStack(spacing: 12) {
-            Image(systemName: "character.book.closed")
+            Image(systemName: "text.book.closed")
                 .font(.system(size: 40))
                 .foregroundColor(.secondary.opacity(0.5))
 
-            Text("暂无易错词")
+            Text("词库为空")
                 .font(.headline)
                 .foregroundColor(.secondary)
 
-            Text("点击右上角「添加」按钮添加易错词")
+            Text("点击右上角「添加」按钮添加词条")
                 .font(.subheadline)
                 .foregroundColor(.secondary.opacity(0.8))
         }
@@ -166,9 +169,25 @@ struct CustomWordsPage: View {
             // 统计信息和清空按钮
             HStack {
                 let enabledCount = words.filter { $0.isEnabled }.count
-                Text("共 \(words.count) 个词条，\(enabledCount) 个已启用")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
+                HStack(spacing: 0) {
+                    Text("共 ")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                    Text("\(words.count)")
+                        .font(.caption)
+                        .fontWeight(.medium)
+                        .foregroundColor(.accentColor)
+                    Text(" 个词条，")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                    Text("\(enabledCount)")
+                        .font(.caption)
+                        .fontWeight(.medium)
+                        .foregroundColor(.accentColor)
+                    Text(" 个已启用")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
 
                 Spacer()
 
@@ -186,32 +205,30 @@ struct CustomWordsPage: View {
                 .padding(.horizontal, 16)
 
             // 词条列表
-            ScrollView {
-                LazyVStack(spacing: 0) {
-                    ForEach(Array(words.enumerated()), id: \.element.id) { index, word in
-                        CustomWordRow(
-                            word: word,
-                            onEdit: {
-                                wordToEdit = word
-                            },
-                            onDelete: {
-                                wordToDelete = word
-                                showDeleteAlert = true
-                            },
-                            onToggle: {
-                                CustomWordService.shared.toggleEnabled(word)
-                                loadWords()
-                            }
-                        )
-
-                        if index < words.count - 1 {
-                            Divider()
-                                .padding(.leading, 16)
+            VStack(spacing: 0) {
+                ForEach(Array(words.enumerated()), id: \.element.id) { index, word in
+                    CustomWordRow(
+                        word: word,
+                        onEdit: {
+                            wordToEdit = word
+                        },
+                        onDelete: {
+                            wordToDelete = word
+                            showDeleteAlert = true
+                        },
+                        onToggle: {
+                            CustomWordService.shared.toggleEnabled(word)
+                            loadWords()
                         }
+                    )
+
+                    if index < words.count - 1 {
+                        Divider()
+                            .padding(.horizontal, 16)
                     }
                 }
             }
-            .frame(maxHeight: 400)
+            .padding(.vertical, 4)
         }
         .background(
             RoundedRectangle(cornerRadius: 10)
@@ -221,6 +238,40 @@ struct CustomWordsPage: View {
             RoundedRectangle(cornerRadius: 10)
                 .stroke(Color(NSColor.separatorColor), lineWidth: 0.5)
         )
+    }
+
+    // MARK: - Usage Tips
+
+    private var usageTipsView: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Label("使用提示", systemImage: "lightbulb")
+                .font(.caption)
+                .fontWeight(.medium)
+                .foregroundColor(.secondary)
+
+            VStack(alignment: .leading, spacing: 4) {
+                tipRow("添加容易被语音识别错误的词语，如人名、品牌名、专业术语")
+                tipRow("词条启用后，会在每次语音识别时自动生效")
+                tipRow("建议添加 2-4 字的词语效果最佳，避免添加过长的句子")
+            }
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 8)
+                .fill(Color.accentColor.opacity(0.05))
+        )
+    }
+
+    private func tipRow(_ text: String) -> some View {
+        HStack(alignment: .top, spacing: 6) {
+            Text("•")
+                .font(.caption)
+                .foregroundColor(.secondary)
+            Text(text)
+                .font(.caption)
+                .foregroundColor(.secondary)
+        }
     }
 
     // MARK: - Methods
@@ -251,28 +302,32 @@ struct CustomWordRow: View {
                 .lineLimit(1)
                 .frame(maxWidth: .infinity, alignment: .leading)
 
-            // 操作按钮（Hover 时显示）
-            HStack(spacing: 6) {
-                // Toggle 开关
-                Toggle("", isOn: Binding(
-                    get: { word.isEnabled },
-                    set: { _ in onToggle() }
-                ))
-                .toggleStyle(.switch)
-                .labelsHidden()
+            // Toggle 开关（始终显示）
+            Toggle("", isOn: Binding(
+                get: { word.isEnabled },
+                set: { _ in onToggle() }
+            ))
+            .toggleStyle(.switch)
+            .controlSize(.small)
+            .labelsHidden()
 
+            // 编辑/删除按钮（Hover 时显示）
+            HStack(spacing: 4) {
                 // 编辑按钮
                 Button(action: onEdit) {
                     Image(systemName: "pencil")
                         .font(.system(size: 11))
                         .foregroundColor(isHoveringEdit ? .primary : .secondary)
-                        .frame(width: 24, height: 24)
-                        .background(Circle().fill(isHoveringEdit ? Color(NSColor.controlColor) : Color(NSColor.controlBackgroundColor)))
+                        .frame(width: 26, height: 26)
+                        .background(
+                            RoundedRectangle(cornerRadius: 6)
+                                .fill(isHoveringEdit ? Color(NSColor.controlColor) : Color.clear)
+                        )
                 }
                 .buttonStyle(.plain)
                 .help("编辑")
                 .onHover { hovering in
-                    withAnimation(.easeInOut(duration: 0.12)) {
+                    withAnimation(.easeInOut(duration: 0.1)) {
                         isHoveringEdit = hovering
                     }
                 }
@@ -282,13 +337,16 @@ struct CustomWordRow: View {
                     Image(systemName: "trash")
                         .font(.system(size: 11))
                         .foregroundColor(isHoveringDelete ? .red : .secondary)
-                        .frame(width: 24, height: 24)
-                        .background(Circle().fill(isHoveringDelete ? Color(NSColor.controlColor) : Color(NSColor.controlBackgroundColor)))
+                        .frame(width: 26, height: 26)
+                        .background(
+                            RoundedRectangle(cornerRadius: 6)
+                                .fill(isHoveringDelete ? Color.red.opacity(0.1) : Color.clear)
+                        )
                 }
                 .buttonStyle(.plain)
                 .help("删除")
                 .onHover { hovering in
-                    withAnimation(.easeInOut(duration: 0.12)) {
+                    withAnimation(.easeInOut(duration: 0.1)) {
                         isHoveringDelete = hovering
                     }
                 }
@@ -296,10 +354,13 @@ struct CustomWordRow: View {
             .opacity(isHovering ? 1 : 0)
         }
         .padding(.horizontal, 16)
-        .padding(.vertical, 10)
+        .padding(.vertical, 8)
         .contentShape(Rectangle())
-        .background(isHovering ? Color(NSColor.controlBackgroundColor).opacity(0.5) : Color.clear)
-        .opacity(word.isEnabled ? 1 : 0.6)
+        .background(
+            RoundedRectangle(cornerRadius: 6)
+                .fill(isHovering ? Color.accentColor.opacity(0.08) : Color.clear)
+                .padding(.horizontal, 8)
+        )
         .onHover { hovering in
             withAnimation(.easeInOut(duration: 0.15)) {
                 isHovering = hovering
@@ -323,8 +384,8 @@ enum CustomWordEditMode: Identifiable {
 
     var title: String {
         switch self {
-        case .add: return "添加易错词"
-        case .edit: return "编辑易错词"
+        case .add: return "添加词条"
+        case .edit: return "编辑词条"
         }
     }
 
@@ -391,7 +452,7 @@ struct CustomWordEditSheet: View {
                             .stroke(Color(NSColor.separatorColor), lineWidth: 0.5)
                     )
 
-                    Text("添加容易识别错误的词语，如人名、品牌名等")
+                    Text("添加人名、品牌名、专业术语等词语")
                         .font(.caption)
                         .foregroundColor(Color(NSColor.tertiaryLabelColor))
                         .padding(.leading, 4)
@@ -480,7 +541,7 @@ struct CustomWordBatchAddSheet: View {
     var body: some View {
         VStack(spacing: 0) {
             // Header
-            Text("批量添加易错词")
+            Text("批量添加词条")
                 .font(.title3)
                 .fontWeight(.semibold)
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -490,7 +551,7 @@ struct CustomWordBatchAddSheet: View {
 
             // Content
             VStack(alignment: .leading, spacing: 12) {
-                Text("输入易错词")
+                Text("输入词条")
                     .font(.subheadline)
                     .foregroundColor(.secondary)
                     .padding(.leading, 4)
@@ -513,14 +574,14 @@ struct CustomWordBatchAddSheet: View {
                 )
 
                 HStack {
-                    Text("每行一个易错词，或用逗号、空格分隔")
+                    Text("每行一个词条，或用逗号、空格分隔")
                         .font(.caption)
                         .foregroundColor(Color(NSColor.tertiaryLabelColor))
 
                     Spacer()
 
                     if wordCount > 0 {
-                        Text("识别到 \(wordCount) 个易错词")
+                        Text("识别到 \(wordCount) 个词条")
                             .font(.caption)
                             .foregroundColor(.accentColor)
                     }
@@ -531,7 +592,7 @@ struct CustomWordBatchAddSheet: View {
                     HStack {
                         Image(systemName: "checkmark.circle.fill")
                             .foregroundColor(.green)
-                        Text("成功添加 \(count) 个易错词")
+                        Text("成功添加 \(count) 个词条")
                             .font(.subheadline)
                             .foregroundColor(.green)
                     }

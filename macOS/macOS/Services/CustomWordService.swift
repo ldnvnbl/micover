@@ -1,8 +1,8 @@
 import Foundation
 import Observation
 
-/// 自定义词典服务
-/// 负责自定义词条的业务逻辑
+/// 个人词库服务
+/// 负责词条的业务逻辑
 @Observable
 @MainActor
 final class CustomWordService {

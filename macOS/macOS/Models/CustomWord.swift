@@ -1,6 +1,6 @@
 import Foundation
 
-/// 自定义词典条目
+/// 个人词库条目
 /// 用于提高语音识别对特定词汇的准确率
 struct CustomWord: Codable, Identifiable, Equatable {
     let id: UUID
