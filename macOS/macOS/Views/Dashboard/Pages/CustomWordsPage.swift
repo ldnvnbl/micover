@@ -23,9 +23,6 @@ struct CustomWordsPage: View {
                 } else {
                     wordListCard
                 }
-
-                // 使用提示
-                usageTipsView
             }
             .padding(.horizontal, 32)
             .padding(.top, 32)
@@ -90,15 +87,9 @@ struct CustomWordsPage: View {
 
     private var headerSection: some View {
         HStack {
-            VStack(alignment: .leading, spacing: 4) {
-                Text("个人词库")
-                    .font(.largeTitle)
-                    .fontWeight(.bold)
-
-                Text("添加人名、品牌名等词语，提高识别准确率")
-                    .font(.subheadline)
-                    .foregroundColor(.secondary)
-            }
+            Text("个人词库")
+                .font(.largeTitle)
+                .fontWeight(.bold)
 
             Spacer()
 
@@ -238,40 +229,6 @@ struct CustomWordsPage: View {
             RoundedRectangle(cornerRadius: 10)
                 .stroke(Color(NSColor.separatorColor), lineWidth: 0.5)
         )
-    }
-
-    // MARK: - Usage Tips
-
-    private var usageTipsView: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Label("使用提示", systemImage: "lightbulb")
-                .font(.caption)
-                .fontWeight(.medium)
-                .foregroundColor(.secondary)
-
-            VStack(alignment: .leading, spacing: 4) {
-                tipRow("添加容易被语音识别错误的词语，如人名、品牌名、专业术语")
-                tipRow("词条启用后，会在每次语音识别时自动生效")
-                tipRow("建议添加 2-4 字的词语效果最佳，避免添加过长的句子")
-            }
-        }
-        .padding(12)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(
-            RoundedRectangle(cornerRadius: 8)
-                .fill(Color.accentColor.opacity(0.05))
-        )
-    }
-
-    private func tipRow(_ text: String) -> some View {
-        HStack(alignment: .top, spacing: 6) {
-            Text("•")
-                .font(.caption)
-                .foregroundColor(.secondary)
-            Text(text)
-                .font(.caption)
-                .foregroundColor(.secondary)
-        }
     }
 
     // MARK: - Methods
