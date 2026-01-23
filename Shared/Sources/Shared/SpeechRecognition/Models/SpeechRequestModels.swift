@@ -128,6 +128,23 @@ public struct RequestMeta: Codable, Sendable {
         enableNonstream: false,
         corpus: nil
     )
+
+    /// 创建带热词的大模型配置
+    /// - Parameter hotwordsJSON: 热词 JSON 字符串，格式：{"hotwords":[{"word":"词条1"}, {"word":"词条2"}]}
+    public static func bigModelWithHotwords(_ hotwordsJSON: String?) -> RequestMeta {
+        guard let hotwordsJSON = hotwordsJSON, !hotwordsJSON.isEmpty else {
+            return defaultBigModel
+        }
+        return RequestMeta(
+            modelName: "bigmodel",
+            enableItn: true,
+            enablePunc: true,
+            enableDdc: false,
+            showUtterances: true,
+            enableNonstream: false,
+            corpus: CorpusMeta(context: hotwordsJSON)
+        )
+    }
 }
 
 /// 完整客户端请求 Payload

@@ -5,6 +5,7 @@ enum DashboardTab: String, CaseIterable {
     case home = "Home"
     case history = "历史"
     case smartPhrases = "智能短语"
+    case customWords = "个人词库"
     case settings = "设置"
 
     var icon: String {
@@ -15,6 +16,8 @@ enum DashboardTab: String, CaseIterable {
             return "clock.arrow.circlepath"
         case .smartPhrases:
             return "text.bubble.fill"
+        case .customWords:
+            return "text.book.closed"
         case .settings:
             return "gearshape.fill"
         }

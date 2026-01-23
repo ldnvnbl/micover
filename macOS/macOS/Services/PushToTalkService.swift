@@ -49,9 +49,31 @@ final class PushToTalkService {
         self.speechService = speechService
         self.appState = appState
         isConfigured = true
-        
+
         // 配置 SmartPhraseService（共享 textInputService 实例）
         SmartPhraseService.shared.configure(appState: appState, textInputService: textInputService)
+
+        // 配置热词提供者（直接从 UserDefaults 读取，避免 actor 隔离问题）
+        speechService.hotwordsProvider = {
+            // 直接从 UserDefaults 读取，绕过 @MainActor 隔离
+            guard let data = UserDefaults.standard.data(forKey: "settings.customWords"),
+                  let words = try? JSONDecoder().decode([CustomWord].self, from: data) else {
+                return nil
+            }
+
+            let enabledWords = words.filter { $0.isEnabled }
+            guard !enabledWords.isEmpty else { return nil }
+
+            let hotwordsArray = enabledWords.map { ["word": $0.word] }
+            let hotwordsDict: [String: Any] = ["hotwords": hotwordsArray]
+
+            guard let jsonData = try? JSONSerialization.data(withJSONObject: hotwordsDict),
+                  let jsonString = String(data: jsonData, encoding: .utf8) else {
+                return nil
+            }
+
+            return jsonString
+        }
 
         // 配置后自动启用（如果有权限）
         enableIfPossible()
