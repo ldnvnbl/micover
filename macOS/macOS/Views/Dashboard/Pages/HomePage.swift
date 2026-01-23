@@ -148,16 +148,8 @@ struct HomePage: View {
                 .foregroundColor(.secondary)
                 .padding(.leading, 4)
 
-            // 第一行：3 列
-            LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
-                statCard(
-                    icon: "wand.and.stars",
-                    title: "智能短语",
-                    value: "\(appState.smartPhraseTriggeredCount)",
-                    unit: "次",
-                    color: .pink
-                )
-
+            // 第一行：2 列
+            LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
                 statCard(
                     icon: "mic.fill",
                     title: "录音次数",
@@ -175,8 +167,8 @@ struct HomePage: View {
                 )
             }
 
-            // 第二行：2 列
-            LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
+            // 第二行：3 列
+            LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
                 statCard(
                     icon: "text.bubble.fill",
                     title: "转写字数",
@@ -191,6 +183,14 @@ struct HomePage: View {
                     value: formatSpeedValue(appState.averageWPM),
                     unit: "字/分",
                     color: .orange
+                )
+
+                statCard(
+                    icon: "wand.and.stars",
+                    title: "智能短语",
+                    value: "\(appState.smartPhraseTriggeredCount)",
+                    unit: "次",
+                    color: .pink
                 )
             }
         }
