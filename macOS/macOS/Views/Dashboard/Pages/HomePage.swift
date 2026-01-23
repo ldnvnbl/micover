@@ -148,8 +148,9 @@ struct HomePage: View {
                 .foregroundColor(.secondary)
                 .padding(.leading, 4)
 
-            // 统计卡片网格
-            LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
+            // 统计卡片网格：3 列布局
+            LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
+                // 第一行
                 statCard(
                     icon: "mic.fill",
                     title: "录音次数",
@@ -174,6 +175,7 @@ struct HomePage: View {
                     color: .purple
                 )
 
+                // 第二行
                 statCard(
                     icon: "speedometer",
                     title: "输入速度",
@@ -181,16 +183,18 @@ struct HomePage: View {
                     unit: "字/分",
                     color: .orange
                 )
-            }
 
-            // 智能短语（单独一行）
-            statCard(
-                icon: "wand.and.stars",
-                title: "智能短语",
-                value: "\(appState.smartPhraseTriggeredCount)",
-                unit: "次",
-                color: .pink
-            )
+                statCard(
+                    icon: "wand.and.stars",
+                    title: "智能短语",
+                    value: "\(appState.smartPhraseTriggeredCount)",
+                    unit: "次",
+                    color: .pink
+                )
+
+                // 占位（空卡片）
+                Color.clear
+            }
         }
     }
 
