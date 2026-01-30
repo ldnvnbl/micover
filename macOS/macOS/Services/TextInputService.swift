@@ -85,7 +85,7 @@ final class TextInputService {
             print("cmd+v click key events sent successfully")
             
             // 延迟恢复原始粘贴板内容
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
                 if let saved = savedContent {
                     pasteboard.clearContents()
                     pasteboard.setString(saved, forType: .string)
