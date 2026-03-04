@@ -7,6 +7,7 @@ enum TrendMetric: String, CaseIterable {
     case duration = "使用时长"
     case words = "转写字数"
     case smartPhrase = "智能短语"
+    case overCommand = "智能回车"
 
     var icon: String {
         switch self {
@@ -14,6 +15,7 @@ enum TrendMetric: String, CaseIterable {
         case .duration: return "clock.fill"
         case .words: return "text.bubble.fill"
         case .smartPhrase: return "wand.and.stars"
+        case .overCommand: return "return"
         }
     }
 
@@ -23,6 +25,7 @@ enum TrendMetric: String, CaseIterable {
         case .duration: return .green
         case .words: return .purple
         case .smartPhrase: return .pink
+        case .overCommand: return .teal
         }
     }
 
@@ -32,6 +35,7 @@ enum TrendMetric: String, CaseIterable {
         case .duration: return "分钟"
         case .words: return "字"
         case .smartPhrase: return "次"
+        case .overCommand: return "次"
         }
     }
 
@@ -46,6 +50,8 @@ enum TrendMetric: String, CaseIterable {
             return stats.totalTranscribedWords
         case .smartPhrase:
             return stats.smartPhraseTriggeredCount
+        case .overCommand:
+            return stats.overCommandTriggeredCount
         }
     }
 }

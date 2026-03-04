@@ -7,13 +7,25 @@ public struct DailyStats: Codable, Sendable {
     public var totalRecordingDuration: Int  // 秒
     public var totalTranscribedWords: Int
     public var smartPhraseTriggeredCount: Int  // 智能短语触发次数
-    
-    public init(date: String, recordingCount: Int = 0, totalRecordingDuration: Int = 0, totalTranscribedWords: Int = 0, smartPhraseTriggeredCount: Int = 0) {
+    public var overCommandTriggeredCount: Int  // Over 智能回车触发次数
+
+    public init(date: String, recordingCount: Int = 0, totalRecordingDuration: Int = 0, totalTranscribedWords: Int = 0, smartPhraseTriggeredCount: Int = 0, overCommandTriggeredCount: Int = 0) {
         self.date = date
         self.recordingCount = recordingCount
         self.totalRecordingDuration = totalRecordingDuration
         self.totalTranscribedWords = totalTranscribedWords
         self.smartPhraseTriggeredCount = smartPhraseTriggeredCount
+        self.overCommandTriggeredCount = overCommandTriggeredCount
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        date = try container.decode(String.self, forKey: .date)
+        recordingCount = try container.decodeIfPresent(Int.self, forKey: .recordingCount) ?? 0
+        totalRecordingDuration = try container.decodeIfPresent(Int.self, forKey: .totalRecordingDuration) ?? 0
+        totalTranscribedWords = try container.decodeIfPresent(Int.self, forKey: .totalTranscribedWords) ?? 0
+        smartPhraseTriggeredCount = try container.decodeIfPresent(Int.self, forKey: .smartPhraseTriggeredCount) ?? 0
+        overCommandTriggeredCount = try container.decodeIfPresent(Int.self, forKey: .overCommandTriggeredCount) ?? 0
     }
     
     /// 创建今天的空统计
@@ -91,6 +103,13 @@ public final class StatsStorage: Sendable {
         stats.smartPhraseTriggeredCount += 1
         saveTodayStats(stats)
     }
+
+    /// 增加 Over 智能回车触发次数
+    public func incrementOverCommandCount() {
+        var stats = getTodayStats()
+        stats.overCommandTriggeredCount += 1
+        saveTodayStats(stats)
+    }
     
     /// 更新今日统计（一次性更新多个字段）
     public func updateTodayStats(
@@ -151,6 +170,7 @@ public final class StatsStorage: Sendable {
             summary.totalRecordingDuration += stat.totalRecordingDuration
             summary.totalTranscribedWords += stat.totalTranscribedWords
             summary.smartPhraseTriggeredCount += stat.smartPhraseTriggeredCount
+            summary.overCommandTriggeredCount += stat.overCommandTriggeredCount
         }
 
         return summary

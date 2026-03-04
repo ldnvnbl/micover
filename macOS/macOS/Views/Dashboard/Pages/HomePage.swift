@@ -192,8 +192,13 @@ struct HomePage: View {
                     color: .pink
                 )
 
-                // 占位（空卡片）
-                Color.clear
+                statCard(
+                    icon: "return",
+                    title: "智能回车",
+                    value: "\(appState.overCommandTriggeredCount)",
+                    unit: "次",
+                    color: .teal
+                )
             }
         }
     }

@@ -103,8 +103,8 @@ final class TextInputService {
         }
         
         if sendEnter {
-            // 等待粘贴完成
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.08) { [weak self] in
+            // 等待粘贴完成（终端应用需要更长的处理时间）
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { [weak self] in
                 self?.sendEnterKey()
             }
         }

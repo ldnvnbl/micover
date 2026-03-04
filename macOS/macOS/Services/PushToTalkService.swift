@@ -316,7 +316,13 @@ final class PushToTalkService {
         
         // 处理 "over" 结尾命令
         let (processedText, shouldSendEnter) = processOverCommand(text)
-        
+
+        // 统计 Over 命令触发次数
+        if shouldSendEnter {
+            StatsStorage.shared.incrementOverCommandCount()
+            appState?.loadTodayStats()
+        }
+
         // 粘贴处理后的文本
         if !processedText.isEmpty {
             textInputService.pasteTextAndSend(processedText, sendEnter: shouldSendEnter)

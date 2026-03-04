@@ -34,6 +34,10 @@ final class AppState {
     var smartPhraseTriggeredCount: Int {
         todayStats.smartPhraseTriggeredCount
     }
+
+    var overCommandTriggeredCount: Int {
+        todayStats.overCommandTriggeredCount
+    }
     
     /// 平均听写速度 (Words Per Minute)
     /// 计算公式: 总字数 / 总时长(分钟)
