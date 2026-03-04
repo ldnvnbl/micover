@@ -15,9 +15,9 @@ public final class SpeechRecognitionService {
     private var resultContinuation: AsyncStream<SpeechRecognitionResult>.Continuation?
     private var currentSeq: Int32 = 1
 
-    /// 热词 JSON 字符串提供者
-    /// 外部可以设置此闭包来动态提供热词
-    public var hotwordsProvider: (() -> String?)?
+    /// Corpus 上下文提供者（热词 + 对话上下文）
+    /// 外部可以设置此闭包来动态提供上下文
+    public var corpusContextProvider: (() -> CorpusContext?)?
     
     public init(apiKeyStorage: APIKeyStorage, keychainManager: KeychainManager) {
         self.apiKeyStorage = apiKeyStorage
@@ -151,17 +151,19 @@ public final class SpeechRecognitionService {
     private func sendFullClientRequest() async throws {
         let deviceId = try keychainManager.getOrCreateDeviceID()
 
-        // 获取热词 JSON（如果有提供者）
-        let hotwordsJSON = hotwordsProvider?()
+        // 获取 corpus 上下文（热词 + 对话上下文）
+        let corpusContext = corpusContextProvider?()
 
-        // Debug: 打印热词配置状态
-        if let hotwords = hotwordsJSON {
-            print("🔥 Hotwords JSON from provider: \(hotwords)")
+        // Debug: 打印上下文配置状态
+        if let ctx = corpusContext {
+            let hotwordCount = ctx.hotwords?.count ?? 0
+            let contextCount = ctx.contextData?.count ?? 0
+            print("🔥 Corpus context: \(hotwordCount) hotwords, \(contextCount) context entries")
         } else {
-            print("🔥 No hotwords configured")
+            print("🔥 No corpus context configured")
         }
 
-        let requestMeta = RequestMeta.bigModelWithHotwords(hotwordsJSON)
+        let requestMeta = RequestMeta.bigModelWithContext(corpusContext)
 
         let payload = FullClientRequestPayload(
             user: UserMeta(uid: deviceId, platform: "macOS"),
@@ -178,8 +180,11 @@ public final class SpeechRecognitionService {
         )
 
         try await webSocketTask?.send(.data(requestData))
-        if let hotwords = hotwordsJSON {
-            print("📤 Sent FullClientRequest with hotwords (seq=\(seq)): \(hotwords)")
+
+        // Debug: 打印完整 payload JSON
+        if let jsonData = try? JSONEncoder().encode(payload),
+           let jsonString = String(data: jsonData, encoding: .utf8) {
+            print("📤 Sent FullClientRequest (seq=\(seq)): \(jsonString)")
         } else {
             print("📤 Sent FullClientRequest (seq=\(seq))")
         }

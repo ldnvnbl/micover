@@ -57,22 +57,70 @@ public struct AudioMeta: Codable, Sendable {
     )
 }
 
+/// 上下文数据条目
+public struct ContextDataEntry: Codable, Sendable {
+    public let text: String?
+    public let imageUrl: String?
+
+    public init(text: String? = nil, imageUrl: String? = nil) {
+        self.text = text
+        self.imageUrl = imageUrl
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case text
+        case imageUrl = "image_url"
+    }
+}
+
+/// 热词条目
+public struct HotwordEntry: Codable, Sendable {
+    public let word: String
+
+    public init(word: String) {
+        self.word = word
+    }
+}
+
+/// Corpus 上下文（同时支持热词和对话上下文）
+public struct CorpusContext: Codable, Sendable {
+    public let hotwords: [HotwordEntry]?
+    public let contextType: String?
+    public let contextData: [ContextDataEntry]?
+
+    public init(
+        hotwords: [HotwordEntry]? = nil,
+        contextType: String? = nil,
+        contextData: [ContextDataEntry]? = nil
+    ) {
+        self.hotwords = hotwords
+        self.contextType = contextType
+        self.contextData = contextData
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case hotwords
+        case contextType = "context_type"
+        case contextData = "context_data"
+    }
+}
+
 /// 语料库元信息（可选）
 public struct CorpusMeta: Codable, Sendable {
     public let boostingTableName: String?
     public let correctTableName: String?
-    public let context: String?
-    
+    public let context: CorpusContext?
+
     public init(
         boostingTableName: String? = nil,
         correctTableName: String? = nil,
-        context: String? = nil
+        context: CorpusContext? = nil
     ) {
         self.boostingTableName = boostingTableName
         self.correctTableName = correctTableName
         self.context = context
     }
-    
+
     enum CodingKeys: String, CodingKey {
         case boostingTableName = "boosting_table_name"
         case correctTableName = "correct_table_name"
@@ -129,10 +177,10 @@ public struct RequestMeta: Codable, Sendable {
         corpus: nil
     )
 
-    /// 创建带热词的大模型配置
-    /// - Parameter hotwordsJSON: 热词 JSON 字符串，格式：{"hotwords":[{"word":"词条1"}, {"word":"词条2"}]}
-    public static func bigModelWithHotwords(_ hotwordsJSON: String?) -> RequestMeta {
-        guard let hotwordsJSON = hotwordsJSON, !hotwordsJSON.isEmpty else {
+    /// 创建带上下文的大模型配置
+    /// - Parameter context: Corpus 上下文（包含热词和对话上下文）
+    public static func bigModelWithContext(_ context: CorpusContext?) -> RequestMeta {
+        guard let context = context else {
             return defaultBigModel
         }
         return RequestMeta(
@@ -142,7 +190,7 @@ public struct RequestMeta: Codable, Sendable {
             enableDdc: false,
             showUtterances: true,
             enableNonstream: false,
-            corpus: CorpusMeta(context: hotwordsJSON)
+            corpus: CorpusMeta(context: context)
         )
     }
 }
