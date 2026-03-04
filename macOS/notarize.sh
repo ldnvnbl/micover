@@ -22,6 +22,11 @@ fi
 
 source .env
 
+# Support alternative env var names
+APP_PASSWORD="${APP_PASSWORD:-$APPLE_APP_SPECIFIC_PASSWORD}"
+TEAM_ID="${TEAM_ID:-$APPLE_TEAM_ID}"
+APP_NAME="${APP_NAME:-MicOver}"
+
 # Validate required environment variables
 REQUIRED_VARS=("APPLE_ID" "APP_PASSWORD" "TEAM_ID" "APP_NAME")
 for var in "${REQUIRED_VARS[@]}"; do

@@ -22,6 +22,9 @@ fi
 
 source .env
 
+# Support alternative env var names
+APP_NAME="${APP_NAME:-MicOver}"
+
 # Validate required environment variables
 REQUIRED_VARS=("APP_NAME")
 for var in "${REQUIRED_VARS[@]}"; do
