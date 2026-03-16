@@ -18,6 +18,11 @@ struct FloatingWindowView: View {
                 ).onAppear {
                     positionWindow(isActive: true)
                 }
+            } else if pushToTalkService.isOptimizingWithAI {
+                AIShimmerIndicator()
+                    .onAppear {
+                        positionWindow(isActive: true)
+                    }
             } else if pushToTalkService.isWaitingForResult {
                 LoadingDotsIndicator(
                     dotCount: 4,

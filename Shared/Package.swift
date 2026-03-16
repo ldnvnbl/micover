@@ -27,6 +27,7 @@ let package = Package(
             dependencies: [
                 .product(name: "KeychainAccess", package: "KeychainAccess"),
                 .product(name: "SwiftAISDK", package: "swift-ai-sdk"),
+                .product(name: "OpenAICompatibleProvider", package: "swift-ai-sdk"),
             ]),
 
     ]

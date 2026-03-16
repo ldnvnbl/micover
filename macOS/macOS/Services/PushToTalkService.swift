@@ -19,6 +19,7 @@ final class PushToTalkService {
 
     private(set) var isEnabled = false
     private(set) var isWaitingForResult = false
+    private(set) var isOptimizingWithAI = false
     
     /// 追踪快捷键释放状态，用于处理快速按下释放的竞态条件
     private var pendingStop = false
@@ -203,15 +204,16 @@ final class PushToTalkService {
 
         isWaitingForResult = true
 
-        // Start timeout task - 8 seconds timeout
+        // Start timeout task - 15 seconds timeout (includes AI optimization time)
         resultTimeoutTask?.cancel()
         resultTimeoutTask = Task { [weak self] in
-            try? await Task.sleep(nanoseconds: 8_000_000_000)  // 8 seconds
+            try? await Task.sleep(nanoseconds: 15_000_000_000)  // 15 seconds
 
             guard let self = self else { return }
 
             if self.isWaitingForResult {
                 self.isWaitingForResult = false
+                self.isOptimizingWithAI = false
                 self.resultListenerTask?.cancel()
                 NSSound.beep()
             }
@@ -274,8 +276,9 @@ final class PushToTalkService {
         // 显示错误 alert
         apiKeyAlertMessage = error.localizedDescription ?? "语音识别服务出错"
         showAPIKeyAlert = true
-        
+
         isWaitingForResult = false
+        isOptimizingWithAI = false
         
         // 播放错误提示音
         NSSound.beep()
@@ -314,8 +317,24 @@ final class PushToTalkService {
             return
         }
         
+        // AI 文本优化
+        var textForProcessing = text
+        if AITextOptimizationService.shared.isAvailable {
+            isOptimizingWithAI = true
+            let dictionary = CustomWordStorage.shared.getEnabledWords().joined(separator: "\n")
+            let recentRecords = HistoryStorage.shared.loadRecords(offset: 0, limit: 10)
+                .filter { $0.actionType == .textInput && !$0.transcribedText.isEmpty }
+            let history = recentRecords.reversed()
+                .map { $0.transcribedText }
+                .joined(separator: "\n")
+            textForProcessing = await AITextOptimizationService.shared.optimize(
+                text, dictionary: dictionary, history: history
+            )
+            isOptimizingWithAI = false
+        }
+
         // 处理 "over" 结尾命令
-        let (processedText, shouldSendEnter) = processOverCommand(text)
+        let (processedText, shouldSendEnter) = processOverCommand(textForProcessing)
 
         // 统计 Over 命令触发次数
         if shouldSendEnter {
@@ -443,6 +462,7 @@ final class PushToTalkService {
         // Reset configuration flag
         isConfigured = false
         isWaitingForResult = false
+        isOptimizingWithAI = false
 
     }
 }

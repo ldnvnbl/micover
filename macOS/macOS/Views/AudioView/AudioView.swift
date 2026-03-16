@@ -286,6 +286,52 @@ struct LoadingDotsIndicator: View {
     }
 }
 
+/// AI 优化中 shimmer 指示器（Apple Intelligence 风格）
+struct AIShimmerIndicator: View {
+    @State private var shimmerOffset: CGFloat = -1
+
+    var body: some View {
+        HStack(spacing: 5) {
+            Image(systemName: "sparkles")
+                .font(.system(size: 10, weight: .medium))
+
+            Text("AI")
+                .font(.system(size: 10, weight: .semibold))
+        }
+        .foregroundColor(.purple.opacity(0.7))
+        .overlay(
+            GeometryReader { geo in
+                let width = geo.size.width
+                LinearGradient(
+                    colors: [.clear, .cyan, .white, .cyan, .clear],
+                    startPoint: .leading,
+                    endPoint: .trailing
+                )
+                .frame(width: width * 0.8)
+                .offset(x: shimmerOffset * width)
+            }
+            .mask(
+                HStack(spacing: 5) {
+                    Image(systemName: "sparkles")
+                        .font(.system(size: 10, weight: .medium))
+
+                    Text("AI")
+                        .font(.system(size: 10, weight: .semibold))
+                }
+            )
+        )
+        .frame(height: 16)
+        .onAppear {
+            withAnimation(
+                .easeInOut(duration: 1.2)
+                .repeatForever(autoreverses: true)
+            ) {
+                shimmerOffset = 1
+            }
+        }
+    }
+}
+
 // MARK: - 示例视图
 struct AudioExampleView: View {
     @State private var selectedStyle = 0

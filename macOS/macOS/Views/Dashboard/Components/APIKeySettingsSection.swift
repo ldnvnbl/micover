@@ -56,10 +56,10 @@ struct APIKeySettingsSection: View {
                 HStack {
                     Text("API Key")
                         .font(.body)
-                    
+
                     Spacer()
-                    
-                    HStack(spacing: 8) {
+
+                    HStack(spacing: 4) {
                         Group {
                             if showKey {
                                 TextField("请输入 API Key", text: $apiKey)
@@ -69,11 +69,9 @@ struct APIKeySettingsSection: View {
                                     .onSubmit { saveKeyIfNeeded() }
                             }
                         }
-                        .textFieldStyle(.roundedBorder)
-                        .controlSize(.regular)
-                        .frame(width: 280)
+                        .textFieldStyle(.plain)
                         .focused($isApiKeyFocused)
-                        
+
                         Button {
                             showKey.toggle()
                         } label: {
@@ -83,6 +81,17 @@ struct APIKeySettingsSection: View {
                         .buttonStyle(.borderless)
                         .help(showKey ? "隐藏" : "显示")
                     }
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 5)
+                    .background(
+                        RoundedRectangle(cornerRadius: 5)
+                            .fill(Color(NSColor.textBackgroundColor))
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 5)
+                            .stroke(Color(NSColor.separatorColor), lineWidth: 0.5)
+                    )
+                    .frame(width: 280)
                 }
                 .padding(.horizontal, 16)
                 .padding(.vertical, 12)
