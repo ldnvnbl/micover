@@ -14,7 +14,15 @@ final class ASRContextProvider {
     private init() {}
 
     /// 构建完整的 corpus context（nonisolated，可在任意线程调用）
+    /// 仅火山引擎后端使用；vLLM 不支持热词/上下文，返回 nil
     nonisolated func buildCorpusContext() -> CorpusContext? {
+        // vLLM REST API 不支持热词上下文
+        // TODO: vLLM 未来可通过 prompt 参数传递领域提示词
+        let provider = UserDefaults.standard.string(forKey: "speech.provider")
+        if provider == SpeechProvider.vllm.rawValue {
+            return nil
+        }
+
         let hotwords = loadHotwords()
         let contextEntries = buildDialogContext()
 
