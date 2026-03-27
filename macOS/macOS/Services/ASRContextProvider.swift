@@ -127,7 +127,7 @@ final class ASRContextProvider {
                 continue
             }
 
-            let textInputRecords = weekRecords.filter { $0.actionType == .textInput && !$0.transcribedText.isEmpty }
+            let textInputRecords = weekRecords.filter { $0.actionType == .textInput && !$0.displayText.isEmpty }
             records.append(contentsOf: textInputRecords)
 
             // 收集足够多就停止（最多取 20 条候选）
@@ -144,11 +144,11 @@ final class ASRContextProvider {
         var usedTokens = 0
 
         for record in records {
-            let tokens = estimateTokens(record.transcribedText)
+            let tokens = estimateTokens(record.displayText)
             if usedTokens + tokens > remainingTokens {
                 break
             }
-            selected.append(ContextDataEntry(text: record.transcribedText))
+            selected.append(ContextDataEntry(text: record.displayText))
             usedTokens += tokens
         }
 

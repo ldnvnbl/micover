@@ -1,4 +1,5 @@
 import SwiftUI
+import Shared
 
 /// 日期分组数据
 private struct DateGroup: Identifiable {
@@ -64,6 +65,7 @@ struct HistoryPage: View {
     @State private var settings: HistorySettings = HistoryStorage.shared.getSettings()
     @State private var now = Date()
     @State private var showClearConfirmation = false
+    @State private var showBatchCorrectionSheet = false
     @State private var isLoading = false
     @State private var isLoadingMore = false
     @State private var hasMore = true
@@ -143,6 +145,12 @@ struct HistoryPage: View {
         .onReceive(NotificationCenter.default.publisher(for: .historyRecordAdded)) { _ in
             loadRecords()
         }
+        .onReceive(NotificationCenter.default.publisher(for: .historyRecordsUpdated)) { _ in
+            loadRecords()
+        }
+        .sheet(isPresented: $showBatchCorrectionSheet) {
+            BatchCorrectionReviewSheet(records: records)
+        }
         .task {
             await scheduleMidnightRefresh()
         }
@@ -166,6 +174,21 @@ struct HistoryPage: View {
             
             Spacer()
             
+            // AI 纠错按钮
+            Button {
+                showBatchCorrectionSheet = true
+            } label: {
+                HStack(spacing: 8) {
+                    Image(systemName: "wand.and.stars")
+                        .font(.system(size: 12))
+                    Text("AI 纠错")
+                        .font(.system(size: 13))
+                }
+            }
+            .buttonStyle(.bordered)
+            .controlSize(.regular)
+            .disabled(records.isEmpty || !AIOptimizationStorage.shared.isConfigured)
+
             // 导出按钮
             Button {
                 HistoryStorage.shared.exportWithSavePanel()
@@ -537,11 +560,19 @@ struct HistoryRecordRow: View {
                 .foregroundColor(.secondary.opacity(0.5))
                 .frame(maxWidth: .infinity, alignment: .leading)
             } else {
-                Text(record.transcribedText)
-                    .font(.system(size: 14))
-                    .foregroundColor(.primary)
-                    .lineLimit(3)
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                HStack(spacing: 4) {
+                    Text(record.displayText)
+                        .font(.system(size: 14))
+                        .foregroundColor(.primary)
+                        .lineLimit(3)
+
+                    if record.correctedText != nil {
+                        Image(systemName: "sparkles")
+                            .font(.system(size: 10))
+                            .foregroundColor(.accentColor)
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
             
             // Action Buttons (always present, opacity controlled)
@@ -601,7 +632,7 @@ struct HistoryRecordRow: View {
     
     private func copyToClipboard() {
         NSPasteboard.general.clearContents()
-        NSPasteboard.general.setString(record.transcribedText, forType: .string)
+        NSPasteboard.general.setString(record.displayText, forType: .string)
         
         // Show feedback
         showCopiedFeedback = true

@@ -333,9 +333,9 @@ final class PushToTalkService {
             isOptimizingWithAI = true
             let dictionary = CustomWordStorage.shared.getEnabledWords().joined(separator: "\n")
             let recentRecords = HistoryStorage.shared.loadRecords(offset: 0, limit: 10)
-                .filter { $0.actionType == .textInput && !$0.transcribedText.isEmpty }
+                .filter { $0.actionType == .textInput && !$0.displayText.isEmpty }
             let history = recentRecords.reversed()
-                .map { $0.transcribedText }
+                .map { $0.displayText }
                 .joined(separator: "\n")
             processedText = await AITextOptimizationService.shared.optimize(
                 strippedText, dictionary: dictionary, history: history

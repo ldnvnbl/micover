@@ -239,6 +239,34 @@ final class HistoryStorage {
         return count
     }
     
+    /// 更新单条记录（例如存储 correctedText）
+    func updateRecord(_ updatedRecord: HistoryRecord) {
+        let wk = weekKey(for: updatedRecord.timestamp)
+        var records = loadRecords(forKey: wk)
+        guard let index = records.firstIndex(where: { $0.id == updatedRecord.id }) else { return }
+        records[index] = updatedRecord
+        saveRecords(records, forKey: wk)
+    }
+
+    /// 批量更新记录，按周分组减少编解码次数
+    func updateRecords(_ updatedRecords: [HistoryRecord]) {
+        let grouped = Dictionary(grouping: updatedRecords) { record in
+            weekKey(for: record.timestamp)
+        }
+
+        for (wk, updates) in grouped {
+            var records = loadRecords(forKey: wk)
+            for update in updates {
+                if let index = records.firstIndex(where: { $0.id == update.id }) {
+                    records[index] = update
+                }
+            }
+            saveRecords(records, forKey: wk)
+        }
+
+        NotificationCenter.default.post(name: .historyRecordsUpdated, object: nil)
+    }
+
     /// 删除单条记录
     func deleteRecord(id: UUID) {
         let allKeys = getAllWeekKeys()
@@ -420,4 +448,6 @@ final class HistoryStorage {
 extension Notification.Name {
     /// 历史记录新增通知
     static let historyRecordAdded = Notification.Name("historyRecordAdded")
+    /// 历史记录批量更新通知
+    static let historyRecordsUpdated = Notification.Name("historyRecordsUpdated")
 }

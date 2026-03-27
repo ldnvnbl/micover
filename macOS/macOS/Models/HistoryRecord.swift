@@ -43,7 +43,13 @@ struct HistoryRecord: Codable, Identifiable {
     let wordCount: Int
     let actionType: HistoryActionType
     let actionDetail: String?       // 智能短语名称等
-    
+    var correctedText: String?      // AI 纠错后的文本（nil 表示未纠错）
+
+    /// 优先返回纠错后的文本，否则返回原始识别文本
+    var displayText: String {
+        correctedText ?? transcribedText
+    }
+
     init(
         id: UUID = UUID(),
         timestamp: Date = Date(),
@@ -51,7 +57,8 @@ struct HistoryRecord: Codable, Identifiable {
         duration: TimeInterval,
         wordCount: Int,
         actionType: HistoryActionType = .textInput,
-        actionDetail: String? = nil
+        actionDetail: String? = nil,
+        correctedText: String? = nil
     ) {
         self.id = id
         self.timestamp = timestamp
@@ -60,6 +67,7 @@ struct HistoryRecord: Codable, Identifiable {
         self.wordCount = wordCount
         self.actionType = actionType
         self.actionDetail = actionDetail
+        self.correctedText = correctedText
     }
 }
 
