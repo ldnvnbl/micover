@@ -26,7 +26,7 @@ public final class AIBatchCorrectionService {
     public init() {}
 
     public var isAvailable: Bool {
-        optimizationStorage.isConfigured
+        optimizationStorage.hasUsableConfiguration
     }
 
     /// 批量纠错，返回 [UUID: correctedText]（仅包含需要修改的记录）
