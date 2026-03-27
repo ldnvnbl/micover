@@ -246,6 +246,7 @@ final class HistoryStorage {
         guard let index = records.firstIndex(where: { $0.id == updatedRecord.id }) else { return }
         records[index] = updatedRecord
         saveRecords(records, forKey: wk)
+        NotificationCenter.default.post(name: .historyRecordsUpdated, object: nil)
     }
 
     /// 批量更新记录，按周分组减少编解码次数

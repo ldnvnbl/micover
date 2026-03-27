@@ -42,7 +42,7 @@ final class BatchCorrectionService {
 
     private(set) var state: State = .idle
     private(set) var results: [CorrectionResult] = []
-    private(set) var extractedMappings: [CorrectionMappingResult] = []
+    private(set) var extractedMappings: [CorrectionMapping] = []
     private(set) var isExtractingMappings = false
     private(set) var mappingsSaved = false
     private var correctionTask: Task<Void, Never>?
@@ -125,11 +125,10 @@ final class BatchCorrectionService {
         guard let index = results.firstIndex(where: { $0.id == id }) else { return }
         results[index].status = .accepted
 
-        // 持久化到存储并通知刷新
+        // 持久化到存储（updateRecord 内部会发通知）
         if var record = sourceRecords.first(where: { $0.id == id }) {
             record.correctedText = results[index].correctedText
             HistoryStorage.shared.updateRecord(record)
-            NotificationCenter.default.post(name: .historyRecordsUpdated, object: nil)
         }
     }
 
@@ -201,10 +200,7 @@ final class BatchCorrectionService {
 
     /// 保存提炼的映射到存储
     func saveExtractedMappings() {
-        let toSave = extractedMappings.map {
-            CorrectionMapping(wrongText: $0.wrongText, correctText: $0.correctText)
-        }
-        CorrectionMappingStorage.shared.addMappings(toSave)
+        CorrectionMappingStorage.shared.addMappings(extractedMappings)
         mappingsSaved = true
     }
 

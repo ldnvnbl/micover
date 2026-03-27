@@ -1,19 +1,5 @@
 import Foundation
-
-/// 纠错映射条目（错误写法 → 正确写法）
-struct CorrectionMapping: Codable, Identifiable {
-    let id: UUID
-    let wrongText: String
-    let correctText: String
-    let createdAt: Date
-
-    init(id: UUID = UUID(), wrongText: String, correctText: String, createdAt: Date = Date()) {
-        self.id = id
-        self.wrongText = wrongText
-        self.correctText = correctText
-        self.createdAt = createdAt
-    }
-}
+import Shared
 
 /// 纠错映射存储 — 持久化 A→B 纠错对照表
 @MainActor
@@ -28,17 +14,24 @@ final class CorrectionMappingStorage {
 
     private init() {}
 
+    /// In-memory cache; invalidated on every write to avoid repeated JSON decoding on the hot path.
+    private var _cache: [CorrectionMapping]?
+
     var mappings: [CorrectionMapping] {
+        if let cached = _cache { return cached }
         guard let data = defaults.data(forKey: Keys.mappings),
               let decoded = try? JSONDecoder().decode([CorrectionMapping].self, from: data) else {
+            _cache = []
             return []
         }
+        _cache = decoded
         return decoded
     }
 
     func save(_ mappings: [CorrectionMapping]) {
         guard let data = try? JSONEncoder().encode(mappings) else { return }
         defaults.set(data, forKey: Keys.mappings)
+        _cache = nil
     }
 
     func addMappings(_ newMappings: [CorrectionMapping]) {

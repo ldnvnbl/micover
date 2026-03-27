@@ -12,19 +12,9 @@ public struct BatchCorrectionInput: Sendable {
     }
 }
 
-/// AI 提炼的纠错映射（错误写法 → 正确写法）
-public struct CorrectionMappingResult: Sendable {
-    public let wrongText: String
-    public let correctText: String
-    public init(wrongText: String, correctText: String) {
-        self.wrongText = wrongText
-        self.correctText = correctText
-    }
-}
-
 /// AI 批量纠错服务 — 将历史记录分批发给大模型进行纠错
 @MainActor
-public final class AIBatchCorrectionService: Sendable {
+public final class AIBatchCorrectionService {
     public static let shared = AIBatchCorrectionService()
 
     private let optimizationStorage = AIOptimizationStorage.shared
@@ -165,7 +155,7 @@ public final class AIBatchCorrectionService: Sendable {
 
         // 尝试提取 JSON 内容（处理可能的 markdown 代码块包裹）
         let jsonText: String
-        if let range = responseText.range(of: "\\[[\\s\\S]*?\\]", options: .regularExpression) {
+        if let range = responseText.range(of: "\\[[\\s\\S]*\\]", options: .regularExpression) {
             jsonText = String(responseText[range])
         } else {
             jsonText = responseText
@@ -200,7 +190,7 @@ public final class AIBatchCorrectionService: Sendable {
     /// 从已接受的纠错对照中提炼词语级别的纠错映射
     public func extractMappings(
         from pairs: [(original: String, corrected: String)]
-    ) async throws -> [CorrectionMappingResult] {
+    ) async throws -> [CorrectionMapping] {
         guard isAvailable, !pairs.isEmpty else { return [] }
 
         let baseURL = optimizationStorage.baseURL
@@ -255,9 +245,9 @@ public final class AIBatchCorrectionService: Sendable {
 
     private nonisolated static func parseMappingResponse(
         _ responseText: String
-    ) -> [CorrectionMappingResult] {
+    ) -> [CorrectionMapping] {
         let jsonText: String
-        if let range = responseText.range(of: "\\[[\\s\\S]*?\\]", options: .regularExpression) {
+        if let range = responseText.range(of: "\\[[\\s\\S]*\\]", options: .regularExpression) {
             jsonText = String(responseText[range])
         } else {
             jsonText = responseText
@@ -268,7 +258,7 @@ public final class AIBatchCorrectionService: Sendable {
             return []
         }
 
-        var results: [CorrectionMappingResult] = []
+        var results: [CorrectionMapping] = []
         var seen = Set<String>()
 
         for item in array {
@@ -280,7 +270,7 @@ public final class AIBatchCorrectionService: Sendable {
             let key = "\(w)→\(c)"
             guard !seen.contains(key) else { continue }
             seen.insert(key)
-            results.append(CorrectionMappingResult(wrongText: w, correctText: c))
+            results.append(CorrectionMapping(wrongText: w, correctText: c))
         }
 
         return results
