@@ -187,7 +187,7 @@ struct HistoryPage: View {
             }
             .buttonStyle(.bordered)
             .controlSize(.regular)
-            .disabled(records.isEmpty || !AIOptimizationStorage.shared.isConfigured)
+            .disabled(records.isEmpty || !AIOptimizationStorage.shared.hasUsableConfiguration)
 
             // 导出按钮
             Button {
