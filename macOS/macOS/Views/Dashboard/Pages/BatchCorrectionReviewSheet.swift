@@ -8,8 +8,11 @@ struct BatchCorrectionReviewSheet: View {
     let records: [HistoryRecord]
 
     @State private var correctionModelId: String = BatchCorrectionStorage.shared.correctionModelId
+    @State private var correctionContext: String = ""
     @State private var editingId: UUID?
     @State private var editText: String = ""
+    @State private var showExistingMappings = false
+    @State private var existingMappings: [CorrectionMapping] = CorrectionMappingStorage.shared.mappings
 
     private var service: BatchCorrectionService { .shared }
 
@@ -98,12 +101,90 @@ struct BatchCorrectionReviewSheet: View {
                     }
             }
 
+            VStack(alignment: .leading, spacing: 6) {
+                Text("背景信息（可选）")
+                    .font(.body)
+                    .foregroundColor(.secondary)
+
+                TextEditor(text: $correctionContext)
+                    .font(.system(size: 13))
+                    .frame(width: 450, height: 70)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 6)
+                            .stroke(Color.secondary.opacity(0.3), lineWidth: 1)
+                    )
+                    .overlay(alignment: .topLeading) {
+                        if correctionContext.isEmpty {
+                            Text("例如：会议主题、专业领域、人名地名等，帮助 AI 更准确地纠错")
+                                .font(.system(size: 13))
+                                .foregroundColor(.secondary.opacity(0.5))
+                                .padding(.horizontal, 5)
+                                .padding(.vertical, 8)
+                                .allowsHitTesting(false)
+                        }
+                    }
+            }
+
+            // 已有纠错映射
+            if !existingMappings.isEmpty {
+                VStack(alignment: .leading, spacing: 6) {
+                    Button {
+                        withAnimation { showExistingMappings.toggle() }
+                    } label: {
+                        HStack(spacing: 4) {
+                            Image(systemName: showExistingMappings ? "chevron.down" : "chevron.right")
+                                .font(.system(size: 10))
+                            Text("纠错映射（\(existingMappings.count) 条，自动应用）")
+                                .font(.system(size: 13))
+                        }
+                        .foregroundColor(.secondary)
+                    }
+                    .buttonStyle(.plain)
+
+                    if showExistingMappings {
+                        ScrollView {
+                            VStack(spacing: 4) {
+                                ForEach(existingMappings) { mapping in
+                                    HStack(spacing: 8) {
+                                        Text(mapping.wrongText)
+                                            .font(.system(size: 12))
+                                            .foregroundColor(.red.opacity(0.8))
+                                            .strikethrough()
+                                        Image(systemName: "arrow.right")
+                                            .font(.system(size: 10))
+                                            .foregroundColor(.secondary)
+                                        Text(mapping.correctText)
+                                            .font(.system(size: 12))
+                                            .foregroundColor(.green)
+                                        Spacer()
+                                        Button {
+                                            CorrectionMappingStorage.shared.removeMapping(id: mapping.id)
+                                            existingMappings = CorrectionMappingStorage.shared.mappings
+                                        } label: {
+                                            Image(systemName: "xmark")
+                                                .font(.system(size: 9))
+                                                .foregroundColor(.secondary)
+                                        }
+                                        .buttonStyle(.plain)
+                                    }
+                                    .padding(.horizontal, 8)
+                                    .padding(.vertical, 3)
+                                }
+                            }
+                        }
+                        .frame(width: 450, height: min(CGFloat(existingMappings.count) * 24, 80))
+                        .background(Color(NSColor.controlBackgroundColor).opacity(0.5))
+                        .clipShape(RoundedRectangle(cornerRadius: 6))
+                    }
+                }
+            }
+
             let candidateCount = records.filter {
                 $0.actionType == .textInput && !$0.transcribedText.isEmpty && $0.correctedText == nil
             }.count
 
             Button {
-                service.startCorrection(records: records)
+                service.startCorrection(records: records, context: correctionContext)
             } label: {
                 HStack(spacing: 8) {
                     Image(systemName: "sparkles")
@@ -164,9 +245,78 @@ struct BatchCorrectionReviewSheet: View {
                             .padding(.leading, 16)
                     }
                 }
+
+                // 提炼的纠错映射
+                if service.isExtractingMappings {
+                    Divider().padding(.vertical, 8)
+                    HStack(spacing: 8) {
+                        ProgressView()
+                            .controlSize(.small)
+                        Text("正在提炼纠错映射...")
+                            .font(.system(size: 13))
+                            .foregroundColor(.secondary)
+                    }
+                    .padding(.vertical, 12)
+                } else if !service.extractedMappings.isEmpty {
+                    Divider().padding(.vertical, 8)
+                    extractedMappingsSection
+                }
             }
             .padding(.vertical, 8)
         }
+    }
+
+    private var extractedMappingsSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Image(systemName: "text.book.closed")
+                    .font(.system(size: 12))
+                    .foregroundColor(.accentColor)
+                Text("提炼的纠错映射")
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundColor(.primary)
+
+                if service.mappingsSaved {
+                    Label("已保存", systemImage: "checkmark.circle.fill")
+                        .font(.system(size: 11))
+                        .foregroundColor(.green)
+                }
+            }
+            .padding(.horizontal, 16)
+
+            ForEach(Array(service.extractedMappings.enumerated()), id: \.offset) { index, mapping in
+                HStack(spacing: 8) {
+                    Text(mapping.wrongText)
+                        .font(.system(size: 13))
+                        .foregroundColor(.red.opacity(0.8))
+                        .strikethrough()
+
+                    Image(systemName: "arrow.right")
+                        .font(.system(size: 10))
+                        .foregroundColor(.secondary)
+
+                    Text(mapping.correctText)
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundColor(.green)
+
+                    Spacer()
+
+                    if !service.mappingsSaved {
+                        Button {
+                            service.removeExtractedMapping(at: index)
+                        } label: {
+                            Image(systemName: "xmark")
+                                .font(.system(size: 10))
+                                .foregroundColor(.secondary)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 4)
+            }
+        }
+        .padding(.vertical, 8)
     }
 
     private func correctionRow(_ result: CorrectionResult) -> some View {
@@ -306,7 +456,7 @@ struct BatchCorrectionReviewSheet: View {
 
             HStack(spacing: 12) {
                 Button("重试") {
-                    service.startCorrection(records: records)
+                    service.startCorrection(records: records, context: correctionContext)
                 }
                 .buttonStyle(.borderedProminent)
 
@@ -345,17 +495,47 @@ struct BatchCorrectionReviewSheet: View {
 
             Spacer()
 
-            if service.state == .reviewing && service.pendingCount > 0 {
-                Button {
-                    service.acceptAll()
-                } label: {
-                    HStack(spacing: 4) {
-                        Image(systemName: "checkmark.circle.fill")
-                        Text("全部接受（\(service.pendingCount)）")
+            if service.state == .reviewing {
+                if service.pendingCount > 0 {
+                    Button {
+                        service.acceptAll()
+                    } label: {
+                        HStack(spacing: 4) {
+                            Image(systemName: "checkmark.circle.fill")
+                            Text("全部接受（\(service.pendingCount)）")
+                        }
                     }
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.regular)
                 }
-                .buttonStyle(.borderedProminent)
-                .controlSize(.regular)
+
+                if service.acceptedCount > 0 && service.extractedMappings.isEmpty && !service.isExtractingMappings {
+                    Button {
+                        service.extractMappings()
+                    } label: {
+                        HStack(spacing: 4) {
+                            Image(systemName: "text.book.closed")
+                            Text("提炼映射")
+                        }
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.regular)
+                }
+
+                if !service.extractedMappings.isEmpty && !service.mappingsSaved {
+                    Button {
+                        service.saveExtractedMappings()
+                        existingMappings = CorrectionMappingStorage.shared.mappings
+                    } label: {
+                        HStack(spacing: 4) {
+                            Image(systemName: "square.and.arrow.down")
+                            Text("保存映射（\(service.extractedMappings.count)）")
+                        }
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .tint(.orange)
+                    .controlSize(.regular)
+                }
             }
 
             Button("关闭") {

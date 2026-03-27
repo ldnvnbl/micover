@@ -12,6 +12,16 @@ public struct BatchCorrectionInput: Sendable {
     }
 }
 
+/// AI 提炼的纠错映射（错误写法 → 正确写法）
+public struct CorrectionMappingResult: Sendable {
+    public let wrongText: String
+    public let correctText: String
+    public init(wrongText: String, correctText: String) {
+        self.wrongText = wrongText
+        self.correctText = correctText
+    }
+}
+
 /// AI 批量纠错服务 — 将历史记录分批发给大模型进行纠错
 @MainActor
 public final class AIBatchCorrectionService: Sendable {
@@ -35,6 +45,9 @@ public final class AIBatchCorrectionService: Sendable {
     ///   - onProgress: 进度回调 (0.0 ~ 1.0)
     public func correctBatch(
         _ inputs: [BatchCorrectionInput],
+        context: String = "",
+        dictionary: [String] = [],
+        mappings: [(wrong: String, correct: String)] = [],
         onProgress: (@MainActor (Double) -> Void)? = nil
     ) async throws -> [UUID: String] {
         guard isAvailable else { return [:] }
@@ -54,7 +67,7 @@ public final class AIBatchCorrectionService: Sendable {
         for (index, chunk) in chunks.enumerated() {
             try Task.checkCancellation()
 
-            let prompt = buildPrompt(for: chunk)
+            let prompt = buildPrompt(for: chunk, context: context, dictionary: dictionary, mappings: mappings)
 
             let chunkResult = await Task.detached {
                 do {
@@ -89,15 +102,42 @@ public final class AIBatchCorrectionService: Sendable {
 
     // MARK: - Prompt
 
-    private func buildPrompt(for inputs: [BatchCorrectionInput]) -> String {
+    private func buildPrompt(for inputs: [BatchCorrectionInput], context: String, dictionary: [String], mappings: [(wrong: String, correct: String)]) -> String {
         var recordLines = ""
         for (index, input) in inputs.enumerated() {
             recordLines += "\(index): \(input.text)\n"
         }
 
+        let contextSection = context.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            ? ""
+            : """
+
+            背景信息（请结合以下上下文理解文本含义，辅助纠错）：
+            \(context.trimmingCharacters(in: .whitespacesAndNewlines))
+
+            """
+
+        let dictionarySection = dictionary.isEmpty
+            ? ""
+            : """
+
+            专业词汇表（遇到发音相近的错误时，优先纠正为以下词汇）：
+            \(dictionary.joined(separator: "、"))
+
+            """
+
+        let mappingsSection = mappings.isEmpty
+            ? ""
+            : """
+
+            已知纠错映射（遇到左侧错误时，直接替换为右侧正确写法）：
+            \(mappings.map { "\($0.wrong) → \($0.correct)" }.joined(separator: "\n"))
+
+            """
+
         return """
         你是一个专业的语音识别文本纠错引擎。以下是多条语音识别的文本记录，请逐条进行纠错和润色。
-
+        \(contextSection)\(dictionarySection)\(mappingsSection)
         规则：
         1. 修复同音字、近音字错误（如"因有额"→"营业额"）
         2. 去除口水词（嗯、那个、就是说）和口吃造成的重复字词
@@ -150,6 +190,97 @@ public final class AIBatchCorrectionService: Sendable {
             if !trimmed.isEmpty && trimmed != input.text {
                 results[input.id] = trimmed
             }
+        }
+
+        return results
+    }
+
+    // MARK: - Mapping Extraction
+
+    /// 从已接受的纠错对照中提炼词语级别的纠错映射
+    public func extractMappings(
+        from pairs: [(original: String, corrected: String)]
+    ) async throws -> [CorrectionMappingResult] {
+        guard isAvailable, !pairs.isEmpty else { return [] }
+
+        let baseURL = optimizationStorage.baseURL
+        let apiKey = optimizationStorage.apiKey
+        let modelId = correctionStorage.correctionModelId
+        let disableThinking = optimizationStorage.disableThinking
+
+        let prompt = buildMappingExtractionPrompt(pairs: pairs)
+
+        return await Task.detached {
+            do {
+                let provider = Self.makeProvider(
+                    baseURL: baseURL, apiKey: apiKey, disableThinking: disableThinking
+                )
+                let model = try provider.languageModel(modelId: modelId)
+                let result = try await generateText(
+                    model: model, prompt: prompt,
+                    settings: CallSettings(maxOutputTokens: 4096)
+                )
+                return Self.parseMappingResponse(result.text)
+            } catch {
+                print("❌ Mapping extraction failed: \(error)")
+                return []
+            }
+        }.value
+    }
+
+    private func buildMappingExtractionPrompt(
+        pairs: [(original: String, corrected: String)]
+    ) -> String {
+        var pairLines = ""
+        for (i, pair) in pairs.enumerated() {
+            pairLines += "原文\(i): \(pair.original)\n纠正\(i): \(pair.corrected)\n\n"
+        }
+
+        return """
+        从以下「原文 → 纠正文本」的对照中，提炼出具体的词语级别「错误写法 → 正确写法」映射关系。
+
+        要求：
+        1. 只提取有意义的词语/短语级别映射（同音字、近音字、术语拼写错误等）
+        2. 忽略标点符号修正、口水词删除、格式调整等
+        3. 每条映射应该是可复用的（即未来遇到相同错误可以直接替换）
+        4. 去重，相同的映射只保留一条
+
+        对照列表：
+        \(pairLines)
+        请以 JSON 数组格式返回，每个元素包含 wrong（错误写法）和 correct（正确写法）字段。
+        如果没有可提炼的映射，返回空数组 []。
+        只输出 JSON 数组，不要包含其他内容。
+        """
+    }
+
+    private nonisolated static func parseMappingResponse(
+        _ responseText: String
+    ) -> [CorrectionMappingResult] {
+        let jsonText: String
+        if let range = responseText.range(of: "\\[[\\s\\S]*?\\]", options: .regularExpression) {
+            jsonText = String(responseText[range])
+        } else {
+            jsonText = responseText
+        }
+
+        guard let data = jsonText.data(using: .utf8),
+              let array = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]] else {
+            return []
+        }
+
+        var results: [CorrectionMappingResult] = []
+        var seen = Set<String>()
+
+        for item in array {
+            guard let wrong = item["wrong"] as? String,
+                  let correct = item["correct"] as? String else { continue }
+            let w = wrong.trimmingCharacters(in: .whitespacesAndNewlines)
+            let c = correct.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !w.isEmpty, !c.isEmpty, w != c else { continue }
+            let key = "\(w)→\(c)"
+            guard !seen.contains(key) else { continue }
+            seen.insert(key)
+            results.append(CorrectionMappingResult(wrongText: w, correctText: c))
         }
 
         return results

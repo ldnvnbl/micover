@@ -29,17 +29,28 @@ final class ASRContextProvider {
 
     // MARK: - Hotwords
 
-    /// 从 UserDefaults 加载启用的热词
+    /// 从 UserDefaults 加载启用的热词（含词库 + 纠错映射中的正确写法）
     nonisolated private func loadHotwords() -> [HotwordEntry]? {
-        guard let data = UserDefaults.standard.data(forKey: "settings.customWords"),
-              let words = try? JSONDecoder().decode([CustomWord].self, from: data) else {
-            return nil
+        var hotwords: [HotwordEntry] = []
+
+        // 词库
+        if let data = UserDefaults.standard.data(forKey: "settings.customWords"),
+           let words = try? JSONDecoder().decode([CustomWord].self, from: data) {
+            let enabled = words.filter { $0.isEnabled }
+            hotwords.append(contentsOf: enabled.map { HotwordEntry(word: $0.word) })
         }
 
-        let enabled = words.filter { $0.isEnabled }
-        guard !enabled.isEmpty else { return nil }
+        // 纠错映射的正确写法也作为热词，帮助 ASR 更准确识别
+        if let data = UserDefaults.standard.data(forKey: "ai.correctionMappings"),
+           let mappings = try? JSONDecoder().decode([CorrectionMapping].self, from: data) {
+            let mappingWords = Set(mappings.map { $0.correctText })
+            let existingWords = Set(hotwords.map { $0.word })
+            for word in mappingWords where !existingWords.contains(word) {
+                hotwords.append(HotwordEntry(word: word))
+            }
+        }
 
-        return enabled.map { HotwordEntry(word: $0.word) }
+        return hotwords.isEmpty ? nil : hotwords
     }
 
     // MARK: - Dialog Context
@@ -69,7 +80,17 @@ final class ASRContextProvider {
             }
         }
 
-        // 3. 最近转录历史（按时间从旧到新）
+        // 3. 纠错映射提示
+        let mappingEntry = correctionMappingsEntry()
+        if let mappingEntry {
+            let tokens = estimateTokens(mappingEntry.text ?? "")
+            if usedTokens + tokens <= Self.maxContextTokenEstimate {
+                entries.append(mappingEntry)
+                usedTokens += tokens
+            }
+        }
+
+        // 4. 最近转录历史（按时间从旧到新）
         let historyEntries = recentTranscriptionEntries(remainingTokens: Self.maxContextTokenEstimate - usedTokens)
         entries.append(contentsOf: historyEntries)
 
@@ -107,7 +128,20 @@ final class ASRContextProvider {
         return ContextDataEntry(text: "用户可能会说以下指令：\(joined)")
     }
 
-    // MARK: - 2c. 最近转录历史
+    // MARK: - 2c. 纠错映射
+
+    nonisolated private func correctionMappingsEntry() -> ContextDataEntry? {
+        guard let data = UserDefaults.standard.data(forKey: "ai.correctionMappings"),
+              let mappings = try? JSONDecoder().decode([CorrectionMapping].self, from: data),
+              !mappings.isEmpty else {
+            return nil
+        }
+
+        let pairs = mappings.map { "\($0.wrongText)应为\($0.correctText)" }.joined(separator: "，")
+        return ContextDataEntry(text: "常见纠错：\(pairs)")
+    }
+
+    // MARK: - 2d. 最近转录历史
 
     nonisolated private func recentTranscriptionEntries(remainingTokens: Int) -> [ContextDataEntry] {
         let userDefaults = UserDefaults.standard

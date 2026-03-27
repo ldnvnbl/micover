@@ -21,7 +21,8 @@ public final class AITextOptimizationService: Sendable {
     ///   - text: 原始语音识别文本
     ///   - dictionary: 用户词典内容（换行分隔的词条列表）
     ///   - history: 最近的转写历史记录
-    public func optimize(_ text: String, dictionary: String, history: String) async -> String {
+    ///   - correctionMappings: 纠错映射（"错误 → 正确" 格式，换行分隔）
+    public func optimize(_ text: String, dictionary: String, history: String, correctionMappings: String = "") async -> String {
         guard isAvailable else { return text }
         // 跳过单字符文本
         guard text.count > 1 else { return text }
@@ -35,6 +36,7 @@ public final class AITextOptimizationService: Sendable {
         // 构建 user prompt：模板替换
         let userPrompt = storage.promptTemplate
             .replacingOccurrences(of: "{{dictionary}}", with: dictionary)
+            .replacingOccurrences(of: "{{correction_mappings}}", with: correctionMappings)
             .replacingOccurrences(of: "{{history}}", with: history)
             .replacingOccurrences(of: "{{current_input}}", with: text)
 

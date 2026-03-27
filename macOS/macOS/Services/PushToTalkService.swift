@@ -337,8 +337,11 @@ final class PushToTalkService {
             let history = recentRecords.reversed()
                 .map { $0.displayText }
                 .joined(separator: "\n")
+            let correctionMappings = CorrectionMappingStorage.shared.mappings
+                .map { "\($0.wrongText) → \($0.correctText)" }
+                .joined(separator: "\n")
             processedText = await AITextOptimizationService.shared.optimize(
-                strippedText, dictionary: dictionary, history: history
+                strippedText, dictionary: dictionary, history: history, correctionMappings: correctionMappings
             )
             isOptimizingWithAI = false
         }

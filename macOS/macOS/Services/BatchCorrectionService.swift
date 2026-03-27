@@ -42,13 +42,16 @@ final class BatchCorrectionService {
 
     private(set) var state: State = .idle
     private(set) var results: [CorrectionResult] = []
+    private(set) var extractedMappings: [CorrectionMappingResult] = []
+    private(set) var isExtractingMappings = false
+    private(set) var mappingsSaved = false
     private var correctionTask: Task<Void, Never>?
     private var sourceRecords: [HistoryRecord] = []
 
     private init() {}
 
     /// 开始批量纠错
-    func startCorrection(records: [HistoryRecord]) {
+    func startCorrection(records: [HistoryRecord], context: String = "") {
         // 只纠错 textInput 类型、有文本、尚未纠错的记录
         let candidates = records.filter {
             $0.actionType == .textInput
@@ -68,9 +71,14 @@ final class BatchCorrectionService {
             BatchCorrectionInput(id: $0.id, text: $0.transcribedText)
         }
 
+        let dictionary = CustomWordStorage.shared.getEnabledWords()
+        let existingMappings = CorrectionMappingStorage.shared.mappings.map {
+            (wrong: $0.wrongText, correct: $0.correctText)
+        }
+
         correctionTask = Task {
             do {
-                let corrections = try await AIBatchCorrectionService.shared.correctBatch(inputs) { [weak self] progress in
+                let corrections = try await AIBatchCorrectionService.shared.correctBatch(inputs, context: context, dictionary: dictionary, mappings: existingMappings) { [weak self] progress in
                     self?.state = .correcting(progress: progress)
                 }
 
@@ -107,6 +115,9 @@ final class BatchCorrectionService {
         state = .idle
         results = []
         sourceRecords = []
+        extractedMappings = []
+        isExtractingMappings = false
+        mappingsSaved = false
     }
 
     /// 接受单条纠错
@@ -159,6 +170,48 @@ final class BatchCorrectionService {
         state = .idle
         results = []
         sourceRecords = []
+        extractedMappings = []
+        isExtractingMappings = false
+        mappingsSaved = false
+    }
+
+    // MARK: - 映射提炼
+
+    /// 从已接受的纠错中提炼映射
+    func extractMappings() {
+        let acceptedPairs = results
+            .filter { $0.status == .accepted }
+            .map { (original: $0.originalText, corrected: $0.correctedText) }
+
+        guard !acceptedPairs.isEmpty else { return }
+
+        isExtractingMappings = true
+        mappingsSaved = false
+
+        Task {
+            do {
+                let mappings = try await AIBatchCorrectionService.shared.extractMappings(from: acceptedPairs)
+                extractedMappings = mappings
+            } catch {
+                extractedMappings = []
+            }
+            isExtractingMappings = false
+        }
+    }
+
+    /// 保存提炼的映射到存储
+    func saveExtractedMappings() {
+        let toSave = extractedMappings.map {
+            CorrectionMapping(wrongText: $0.wrongText, correctText: $0.correctText)
+        }
+        CorrectionMappingStorage.shared.addMappings(toSave)
+        mappingsSaved = true
+    }
+
+    /// 移除单条提炼的映射
+    func removeExtractedMapping(at index: Int) {
+        guard index >= 0, index < extractedMappings.count else { return }
+        extractedMappings.remove(at: index)
     }
 
     // MARK: - 统计
