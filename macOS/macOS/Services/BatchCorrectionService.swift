@@ -114,10 +114,11 @@ final class BatchCorrectionService {
         guard let index = results.firstIndex(where: { $0.id == id }) else { return }
         results[index].status = .accepted
 
-        // 持久化到存储
+        // 持久化到存储并通知刷新
         if var record = sourceRecords.first(where: { $0.id == id }) {
             record.correctedText = results[index].correctedText
             HistoryStorage.shared.updateRecord(record)
+            NotificationCenter.default.post(name: .historyRecordsUpdated, object: nil)
         }
     }
 
@@ -153,15 +154,11 @@ final class BatchCorrectionService {
 
     /// 关闭审核（重置状态）
     func dismiss() {
-        // 如果有已接受的，发送更新通知
-        let hasAccepted = results.contains { $0.status == .accepted }
+        correctionTask?.cancel()
+        correctionTask = nil
         state = .idle
         results = []
         sourceRecords = []
-
-        if hasAccepted {
-            NotificationCenter.default.post(name: .historyRecordsUpdated, object: nil)
-        }
     }
 
     // MARK: - 统计

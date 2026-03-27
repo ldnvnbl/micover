@@ -125,7 +125,7 @@ public final class AIBatchCorrectionService: Sendable {
 
         // 尝试提取 JSON 内容（处理可能的 markdown 代码块包裹）
         let jsonText: String
-        if let range = responseText.range(of: "\\[[\\s\\S]*\\]", options: .regularExpression) {
+        if let range = responseText.range(of: "\\[[\\s\\S]*?\\]", options: .regularExpression) {
             jsonText = String(responseText[range])
         } else {
             jsonText = responseText
