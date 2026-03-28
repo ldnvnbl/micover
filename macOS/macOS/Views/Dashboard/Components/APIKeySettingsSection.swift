@@ -20,6 +20,7 @@ struct APIKeySettingsSection: View {
     @State private var vllmBaseURL: String = ""
     @State private var vllmModelName: String = ""
     @State private var vllmAPIKey: String = ""
+    @State private var vllmApiMode: VLLMApiMode = .audioTranscriptions
     @State private var showVllmKey: Bool = false
     @FocusState private var isVllmFieldFocused: Bool
 
@@ -136,6 +137,9 @@ struct APIKeySettingsSection: View {
         }
         .onChange(of: isVllmFieldFocused) { _, isFocused in
             if !isFocused { saveSettingsIfNeeded() }
+        }
+        .onChange(of: vllmApiMode) { _, _ in
+            saveSettingsIfNeeded()
         }
         .alert("连接测试", isPresented: $showTestAlert) {
             Button("确定", role: .cancel) {}
@@ -255,6 +259,28 @@ struct APIKeySettingsSection: View {
         Divider()
             .padding(.horizontal, 16)
 
+        // 接口类型行
+        HStack {
+            Text("接口类型")
+                .font(.body)
+
+            Spacer()
+
+            Picker("", selection: $vllmApiMode) {
+                ForEach(VLLMApiMode.allCases) { mode in
+                    Text(mode.displayName).tag(mode)
+                }
+            }
+            .pickerStyle(.menu)
+            .controlSize(.regular)
+            .frame(width: 280)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
+
+        Divider()
+            .padding(.horizontal, 16)
+
         // 模型名称行
         HStack {
             Text("模型名称")
@@ -356,6 +382,7 @@ struct APIKeySettingsSection: View {
         vllmBaseURL = apiKeyStorage.vllmBaseURL
         vllmModelName = apiKeyStorage.vllmModelName
         vllmAPIKey = apiKeyStorage.vllmAPIKey ?? ""
+        vllmApiMode = apiKeyStorage.vllmApiMode
     }
 
     private func saveSettingsIfNeeded() {
@@ -364,6 +391,7 @@ struct APIKeySettingsSection: View {
         let vllmChanged = vllmBaseURL != apiKeyStorage.vllmBaseURL
             || vllmModelName != apiKeyStorage.vllmModelName
             || vllmAPIKey != (apiKeyStorage.vllmAPIKey ?? "")
+            || vllmApiMode != apiKeyStorage.vllmApiMode
 
         guard providerChanged || volcChanged || vllmChanged else { return }
 
@@ -379,6 +407,7 @@ struct APIKeySettingsSection: View {
         apiKeyStorage.save(vllmBaseURL: vllmBaseURL)
         apiKeyStorage.save(vllmModelName: vllmModelName)
         apiKeyStorage.save(vllmAPIKey: vllmAPIKey.isEmpty ? nil : vllmAPIKey)
+        apiKeyStorage.save(vllmApiMode: vllmApiMode)
 
         withAnimation(.spring(response: 0.3)) {
             isSaved = true

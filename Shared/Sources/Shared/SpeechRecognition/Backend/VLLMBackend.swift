@@ -35,16 +35,18 @@ final class VLLMBackend: SpeechBackend {
     private let baseURL: String
     private let modelName: String
     private let apiKey: String?
+    private let apiMode: VLLMApiMode
 
     private var audioBuffer = Data()
     private var continuation: AsyncStream<SpeechRecognitionResult>.Continuation?
     private let session: URLSession
     private var sequenceCounter: Int32 = 0
 
-    init(baseURL: String, modelName: String, apiKey: String?) {
+    init(baseURL: String, modelName: String, apiKey: String?, apiMode: VLLMApiMode = .audioTranscriptions) {
         self.baseURL = baseURL
         self.modelName = modelName
         self.apiKey = apiKey
+        self.apiMode = apiMode
         self.session = URLSession(configuration: .default)
     }
 
@@ -78,7 +80,13 @@ final class VLLMBackend: SpeechBackend {
         audioBuffer = Data()
 
         do {
-            let text = try await postTranscription(wavData: wavData)
+            let text: String
+            switch apiMode {
+            case .audioTranscriptions:
+                text = try await postTranscriptionStandard(wavData: wavData)
+            case .chatCompletions:
+                text = try await postTranscription(wavData: wavData)
+            }
             sequenceCounter += 1
 
             let result = SpeechRecognitionResult(
@@ -207,6 +215,43 @@ final class VLLMBackend: SpeechBackend {
         }
 
         return fullText
+    }
+
+    /// 标准 OpenAI Audio Transcriptions 接口 (POST /audio/transcriptions, multipart/form-data)
+    private func postTranscriptionStandard(wavData: Data) async throws -> String {
+        guard let url = URL(string: "\(baseURL)/audio/transcriptions") else {
+            throw SpeechRecognitionError.invalidBaseURL
+        }
+
+        var formData = MultipartFormData()
+        formData.addFile(name: "file", fileName: "audio.wav", mimeType: "audio/wav", data: wavData)
+        formData.addField(name: "model", value: modelName)
+        formData.addField(name: "response_format", value: "json")
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue(formData.contentType, forHTTPHeaderField: "Content-Type")
+        request.timeoutInterval = 60
+
+        if let apiKey, !apiKey.isEmpty {
+            request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
+        }
+
+        request.httpBody = formData.finalize()
+
+        let (data, response) = try await session.data(for: request)
+
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw SpeechRecognitionError.connectionFailed("无效的服务器响应")
+        }
+
+        guard httpResponse.statusCode == 200 else {
+            let message = parseErrorMessage(from: data) ?? "HTTP \(httpResponse.statusCode)"
+            throw SpeechRecognitionError.httpError(statusCode: httpResponse.statusCode, message: message)
+        }
+
+        let transcription = try JSONDecoder().decode(VLLMTranscriptionResponse.self, from: data)
+        return transcription.text
     }
 
     private func parseErrorMessage(from data: Data) -> String? {

@@ -64,6 +64,13 @@ struct VLLMModel: Codable, Sendable {
     let object: String?
 }
 
+// MARK: - Audio Transcriptions 响应
+
+/// POST /audio/transcriptions 响应体
+struct VLLMTranscriptionResponse: Decodable {
+    let text: String
+}
+
 // MARK: - OpenAI 风格错误响应
 
 struct VLLMErrorResponse: Codable, Sendable {

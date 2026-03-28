@@ -97,7 +97,8 @@ public final class SpeechRecognitionService {
             return VLLMBackend(
                 baseURL: apiKeyStorage.vllmBaseURL,
                 modelName: apiKeyStorage.vllmModelName,
-                apiKey: apiKeyStorage.vllmAPIKey
+                apiKey: apiKeyStorage.vllmAPIKey,
+                apiMode: apiKeyStorage.vllmApiMode
             )
         }
     }

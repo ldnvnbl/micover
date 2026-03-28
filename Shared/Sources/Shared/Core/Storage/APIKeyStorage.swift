@@ -1,5 +1,22 @@
 import Foundation
 
+/// vLLM API 调用模式
+public enum VLLMApiMode: String, CaseIterable, Identifiable, Sendable {
+    /// 标准 OpenAI Audio Transcriptions 接口 (POST /audio/transcriptions, multipart/form-data)
+    case audioTranscriptions = "audio_transcriptions"
+    /// Chat Completions 接口 (POST /chat/completions, base64 audio data URL)
+    case chatCompletions = "chat_completions"
+
+    public var id: String { rawValue }
+
+    public var displayName: String {
+        switch self {
+        case .audioTranscriptions: return "Audio Transcriptions (标准)"
+        case .chatCompletions: return "Chat Completions"
+        }
+    }
+}
+
 /// 语音识别服务提供商
 public enum SpeechProvider: String, CaseIterable, Identifiable, Sendable {
     case volcEngine = "volcengine"
@@ -32,6 +49,7 @@ public final class APIKeyStorage: Sendable {
         static let vllmBaseURL = "vllm.base.url"
         static let vllmModelName = "vllm.model.name"
         static let vllmAPIKey = "vllm.api.key"
+        static let vllmApiMode = "vllm.api.mode"
     }
 
     public init() {}
@@ -89,6 +107,19 @@ public final class APIKeyStorage: Sendable {
         set { defaults.set(newValue, forKey: Keys.vllmAPIKey) }
     }
 
+    public var vllmApiMode: VLLMApiMode {
+        get {
+            guard let rawValue = defaults.string(forKey: Keys.vllmApiMode),
+                  let value = VLLMApiMode(rawValue: rawValue) else {
+                return .audioTranscriptions
+            }
+            return value
+        }
+        set {
+            defaults.set(newValue.rawValue, forKey: Keys.vllmApiMode)
+        }
+    }
+
     // MARK: - 状态检查
 
     public var isConfigured: Bool {
@@ -123,11 +154,16 @@ public final class APIKeyStorage: Sendable {
         self.vllmAPIKey = vllmAPIKey
     }
 
+    public func save(vllmApiMode: VLLMApiMode) {
+        self.vllmApiMode = vllmApiMode
+    }
+
     public func clear() {
         defaults.removeObject(forKey: Keys.apiKey)
         defaults.removeObject(forKey: Keys.resourceId)
         defaults.removeObject(forKey: Keys.vllmBaseURL)
         defaults.removeObject(forKey: Keys.vllmModelName)
         defaults.removeObject(forKey: Keys.vllmAPIKey)
+        defaults.removeObject(forKey: Keys.vllmApiMode)
     }
 }
