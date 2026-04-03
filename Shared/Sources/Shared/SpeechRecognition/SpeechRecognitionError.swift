@@ -10,11 +10,15 @@ public enum SpeechRecognitionError: LocalizedError, Sendable {
     case serverError(code: Int, message: String?)
     case timeout
     case cancelled
-    
+    // vLLM 相关
+    case httpError(statusCode: Int, message: String)
+    case invalidBaseURL
+    case audioBufferEmpty
+
     public var errorDescription: String? {
         switch self {
         case .notConfigured:
-            return "请先在设置中配置 API Key"
+            return "请先在设置中配置 API"
         case .connectionFailed(let message):
             return "连接失败: \(message)"
         case .protocolError(let message):
@@ -29,6 +33,12 @@ public enum SpeechRecognitionError: LocalizedError, Sendable {
             return "请求超时"
         case .cancelled:
             return "操作已取消"
+        case .httpError(let statusCode, let message):
+            return "HTTP 错误 (\(statusCode)): \(message)"
+        case .invalidBaseURL:
+            return "无效的服务地址"
+        case .audioBufferEmpty:
+            return "没有录制到音频数据"
         }
     }
 }
