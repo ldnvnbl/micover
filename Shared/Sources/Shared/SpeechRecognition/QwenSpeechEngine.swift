@@ -152,8 +152,10 @@ final class QwenSpeechEngine: SpeechRecognitionEngine {
         try await webSocketTask.send(.string(try Self.jsonString(event)))
     }
 
-    /// 等待服务端确认 session 已就绪（`session.created` / `session.updated`），
-    /// 若收到 `error` 事件则抛出对应错误
+    /// 等待服务端确认我们发送的 `session.update` 已被接受（`session.updated`），
+    /// 若收到 `error` 事件则抛出对应错误。
+    /// 注意：连接建立后服务端会先推送默认 session 的 `session.created`，
+    /// 不能将其视为我们配置生效的标志，否则无效的 session 选项会在此被静默忽略。
     private func waitForSessionAck() async throws {
         guard let task = webSocketTask else {
             throw SpeechRecognitionError.notConnected
@@ -165,8 +167,10 @@ final class QwenSpeechEngine: SpeechRecognitionEngine {
 
             let type = event["type"] as? String ?? ""
             switch type {
-            case "session.created", "session.updated":
+            case "session.updated":
                 return
+            case "session.created":
+                continue
             case "error":
                 let info = event["error"] as? [String: Any]
                 let message = info?["message"] as? String ?? "Qwen ASR 返回错误"
