@@ -60,6 +60,15 @@ final class QwenSpeechEngine: SpeechRecognitionEngine {
         try await connect()
         try await sendSessionUpdate()
 
+        do {
+            try await withTimeout(seconds: 10) {
+                try await self.waitForSessionAck()
+            }
+        } catch {
+            await disconnect()
+            throw error
+        }
+
         return AsyncStream { continuation in
             self.resultContinuation = continuation
             self.receiveTask = Task {
