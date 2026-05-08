@@ -182,7 +182,13 @@ final class QwenSpeechEngine: SpeechRecognitionEngine {
     private func receiveMessages() async {
         guard let task = webSocketTask else { return }
 
-        var lastText = ""
+        var completedTranscripts: [String] = []
+        var currentItemText = ""
+
+        func combinedText() -> String {
+            let prefix = completedTranscripts.joined()
+            return prefix + currentItemText
+        }
 
         do {
             while isConnected {
@@ -197,27 +203,45 @@ final class QwenSpeechEngine: SpeechRecognitionEngine {
                 case "conversation.item.input_audio_transcription.text":
                     let text = event["text"] as? String ?? ""
                     let stash = event["stash"] as? String ?? ""
-                    let combined = text + stash
-                    lastText = combined
+                    currentItemText = text + stash
                     sequence &+= 1
                     resultContinuation?.yield(
-                        SpeechRecognitionResult(text: combined, isLastPackage: false, sequence: sequence)
+                        SpeechRecognitionResult(text: combinedText(), isLastPackage: false, sequence: sequence)
                     )
 
                 case "conversation.item.input_audio_transcription.completed":
                     if let transcript = event["transcript"] as? String, !transcript.isEmpty {
-                        lastText = transcript
-                        sequence &+= 1
-                        resultContinuation?.yield(
-                            SpeechRecognitionResult(text: transcript, isLastPackage: false, sequence: sequence)
-                        )
+                        completedTranscripts.append(transcript)
                     }
-
-                case "session.finished":
-                    let transcript = (event["transcript"] as? String).flatMap { $0.isEmpty ? nil : $0 } ?? lastText
+                    currentItemText = ""
                     sequence &+= 1
                     resultContinuation?.yield(
-                        SpeechRecognitionResult(text: transcript, isLastPackage: true, sequence: sequence)
+                        SpeechRecognitionResult(text: combinedText(), isLastPackage: false, sequence: sequence)
+                    )
+
+                case "conversation.item.input_audio_transcription.failed":
+                    let info = event["error"] as? [String: Any]
+                    let message = info?["message"] as? String
+                        ?? (event["error"] as? String)
+                        ?? "Qwen ASR 单条识别失败"
+                    let code = (info?["code"] as? Int) ?? -1
+                    let err = SpeechRecognitionError.serverError(code: code, message: message)
+                    currentItemText = ""
+                    sequence &+= 1
+                    resultContinuation?.yield(
+                        SpeechRecognitionResult(text: combinedText(), isLastPackage: true, sequence: sequence, error: err)
+                    )
+                    resultContinuation?.finish()
+                    resultContinuation = nil
+                    Task { await self.disconnect() }
+                    return
+
+                case "session.finished":
+                    let serverTranscript = (event["transcript"] as? String).flatMap { $0.isEmpty ? nil : $0 }
+                    let finalText = serverTranscript ?? combinedText()
+                    sequence &+= 1
+                    resultContinuation?.yield(
+                        SpeechRecognitionResult(text: finalText, isLastPackage: true, sequence: sequence)
                     )
                     resultContinuation?.finish()
                     resultContinuation = nil
@@ -230,7 +254,7 @@ final class QwenSpeechEngine: SpeechRecognitionEngine {
                     let code = (info?["code"] as? Int) ?? -1
                     let err = SpeechRecognitionError.serverError(code: code, message: message)
                     resultContinuation?.yield(
-                        SpeechRecognitionResult(text: "", isLastPackage: true, sequence: sequence, error: err)
+                        SpeechRecognitionResult(text: combinedText(), isLastPackage: true, sequence: sequence, error: err)
                     )
                     resultContinuation?.finish()
                     resultContinuation = nil
