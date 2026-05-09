@@ -17,16 +17,20 @@ actor RecordingCoordinator {
 
         packetCount = 0
 
-        let audioStream = try await audioService.startRecording()
+        // 1. 先建立语音识别连接，等待服务端就绪。
+        //    这样可以避免在音频引擎已启动的情况下因为连接失败/超时
+        //    而需要立刻停止音频，造成 CoreAudio IOThread 状态不一致。
+        let resultStream = try await speechService.startSession()
 
-        let resultStream: AsyncStream<SpeechRecognitionResult>
+        // 2. 语音通道就绪后再启动音频采集。
+        let audioStream: AsyncStream<Data>
         do {
-            resultStream = try await speechService.startSession()
+            audioStream = try await audioService.startRecording()
         } catch {
-            await audioService.stopRecording()
+            await speechService.disconnect()
             throw error
         }
-        
+
         audioStreamTask = Task {
             for await audioData in audioStream {
                 guard !Task.isCancelled else { break }
@@ -37,13 +41,13 @@ actor RecordingCoordinator {
                     await MainActor.run {
                         appState.recordedPackets = count
                     }
-                    
+
                 } catch {
                     print("❌ Failed to send audio: \(error)")
                 }
             }
         }
-        
+
         return resultStream
     }
     
