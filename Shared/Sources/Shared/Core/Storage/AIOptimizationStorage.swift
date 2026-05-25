@@ -97,11 +97,16 @@ public final class AIOptimizationStorage: Sendable {
         set { defaults.set(newValue, forKey: Keys.disableThinking) }
     }
 
-    /// 是否已完整配置（启用 + API Key 非空 + Base URL 非空）
-    public var isConfigured: Bool {
-        guard isEnabled else { return false }
+    /// 是否存在可复用的 AI 配置（不关心启用开关）
+    public var hasUsableConfiguration: Bool {
         guard let key = apiKey, !key.isEmpty else { return false }
         return !baseURL.isEmpty
+    }
+
+    /// 是否已完整配置（启用 + 存在可复用的 AI 配置）
+    public var isConfigured: Bool {
+        guard isEnabled else { return false }
+        return hasUsableConfiguration
     }
 
     public func clear() {
